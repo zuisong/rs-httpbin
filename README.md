@@ -65,3 +65,13 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /websocket/echo?max_fragment_size=2048&max_message_size=10240 A WebSocket echo service.
 - [x] [/xml](/xml) Returns some XML
 
+<style>
+@media (prefers-color-scheme: dark) {
+  html, img, video, iframe {
+    filter: invert(1);
+  }
+  body {
+    background-color: white;
+  }
+}
+</style>

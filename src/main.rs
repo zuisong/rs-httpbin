@@ -27,7 +27,11 @@ async fn main() {
 
 async fn index() -> Html<String> {
     let md = include_str!("../README.md");
-    Html(comrak::markdown_to_html(md, &Options::default()))
+    let mut options = Options::default();
+    // options.extension.tagfilter = true;
+    options.render.unsafe_ = true;
+    options.render.escape = false;
+    Html(comrak::markdown_to_html(md, &options))
 }
 
 async fn json() -> impl IntoResponse {
