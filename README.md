@@ -35,7 +35,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /head Returns response headers. Allows only HEAD requests.
 - [ ] /headers Returns request header dict.
 - [ ] /hidden-basic-auth/:user/:passwd 404'd BasicAuth.
-- [ ] /html Renders an HTML Page.
+- [x] [/html](/html) Renders an HTML Page.
 - [ ] /hostname Returns the name of the host serving the request.
 - [ ] /image Returns page containing an image based on sent Accept header.
 - [ ] /image/jpeg Returns a JPEG image.
@@ -63,5 +63,5 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /user-agent Returns user-agent.
 - [ ] /uuid Generates a UUIDv4 value.
 - [ ] /websocket/echo?max_fragment_size=2048&max_message_size=10240 A WebSocket echo service.
-- [ ] /xml Returns some XML
+- [x] [/xml](/xml) Returns some XML
 
