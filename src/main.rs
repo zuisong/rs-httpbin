@@ -25,14 +25,11 @@ use tower_http::{
 };
 
 mod data;
+#[cfg(test)]
+mod tests;
 
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .init();
-
-    let app = Router::new()
+fn app() -> Router<()> {
+    Router::new()
         .route("/", get(index))
         //
         .route("/delete", delete(anything))
@@ -58,6 +55,16 @@ async fn main() {
         .route("/image/svg", get(svg))
         .route("/image/png", get(png))
         .route("/image/webp", get(webp))
+}
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
+
+    let router: Router = app();
+    let app = router
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
