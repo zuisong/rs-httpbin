@@ -44,7 +44,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/image/png](/image/png) Returns a PNG image.
 - [x] [/image/svg](/image/svg) Returns a SVG image.
 - [x] [/image/webp](/image/webp) Returns a WEBP image.
-- [ ] /ip Returns Origin IP.
+- [x] [/ip](/ip) Returns Origin IP.
 - [ ] [/json](/json) Returns JSON.
 - [ ] /links/:n Returns page containing n HTML links.
 - [ ] /patch Returns request data. Allows only PATCH requests.

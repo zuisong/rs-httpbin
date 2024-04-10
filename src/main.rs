@@ -1,3 +1,6 @@
+use std::net::SocketAddr;
+
+use axum::extract::ConnectInfo;
 use axum::http::header::CONTENT_TYPE;
 use axum::http::{status, HeaderMap, HeaderValue};
 use axum::response::{Html, IntoResponse, Response};
@@ -19,6 +22,7 @@ async fn main() {
         .route("/", get(index))
         .route("/json", get(json))
         .route("/xml", get(xml))
+        .route("/ip", get(ip))
         .route("/html", get(html))
         .route("/image", get(image))
         .route("/image/jpeg", get(jpeg))
@@ -29,7 +33,12 @@ async fn main() {
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 
-    axum::serve(listener, app).await.unwrap();
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .await
+    .unwrap();
 }
 
 async fn index() -> Html<String> {
@@ -147,4 +156,14 @@ async fn webp() -> Response {
         include_bytes!("../assets/webp.webp"),
     )
         .into_response()
+}
+
+async fn ip(ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Response {
+    let ip = addr.ip();
+    Json(json!(
+        {
+            "origin": ip.to_string(),
+        }
+    ))
+    .into_response()
 }
