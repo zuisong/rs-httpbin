@@ -1,9 +1,11 @@
 use axum::http::header::CONTENT_TYPE;
-use axum::http::{HeaderMap, HeaderValue};
-use axum::response::{Html, IntoResponse};
+use axum::http::{status, HeaderMap, HeaderValue};
+use axum::response::{Html, IntoResponse, Response};
+use axum::Json;
 use axum::{routing::get, Router};
 use comrak::Options;
-use mime::{APPLICATION_JSON, TEXT_HTML, TEXT_XML};
+use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML, TEXT_XML};
+use serde_json::json;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
@@ -18,6 +20,11 @@ async fn main() {
         .route("/json", get(json))
         .route("/xml", get(xml))
         .route("/html", get(html))
+        .route("/image", get(image))
+        .route("/image/jpeg", get(jpeg))
+        .route("/image/svg", get(svg))
+        .route("/image/png", get(png))
+        .route("/image/webp", get(webp))
         .layer(TraceLayer::new_for_http())
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -31,7 +38,21 @@ async fn index() -> Html<String> {
     // options.extension.tagfilter = true;
     options.render.unsafe_ = true;
     options.render.escape = false;
-    Html(comrak::markdown_to_html(md, &options))
+    Html(
+        comrak::markdown_to_html(md, &options)
+            + (r#"
+<style>
+  @media (prefers-color-scheme: dark) {
+    html, img, video, iframe {
+      filter: invert(1);
+    }
+    body {
+      background-color: white;
+    }
+  }
+</style>
+    "#),
+    )
 }
 
 async fn json() -> impl IntoResponse {
@@ -40,30 +61,7 @@ async fn json() -> impl IntoResponse {
             CONTENT_TYPE,
             HeaderValue::from_static(APPLICATION_JSON.essence_str()),
         )]),
-        indoc::indoc! {r#"
-            {
-              "slideshow": {
-                "author": "Yours Truly",
-                "date": "date of publication",
-                "slides": [
-                  {
-                    "title": "Wake up to WonderWidgets!",
-                    "type": "all"
-                  },
-                  {
-                    "items": [
-                      "Why <em>WonderWidgets</em> are great",
-                      "Who <em>buys</em> WonderWidgets"
-                    ],
-                    "title": "Overview",
-                    "type": "all"
-                  }
-                ],
-                "title": "Sample Slide Show"
-              }
-            }
-            "#,
-        },
+        include_str!("../assets/sample.json"),
     )
 }
 
@@ -73,33 +71,7 @@ async fn xml() -> impl IntoResponse {
             CONTENT_TYPE,
             HeaderValue::from_static(TEXT_XML.essence_str()),
         )]),
-        indoc::indoc! {r#"
-            <?xml version='1.0' encoding='us-ascii'?>
-
-            <!--  A SAMPLE set of slides  -->
-
-            <slideshow
-                title="Sample Slide Show"
-                date="Date of publication"
-                author="Yours Truly"
-                >
-
-                <!-- TITLE SLIDE -->
-                <slide type="all">
-                  <title>Wake up to WonderWidgets!</title>
-                </slide>
-
-                <!-- OVERVIEW -->
-                <slide type="all">
-                    <title>Overview</title>
-                    <item>Why <em>WonderWidgets</em> are great</item>
-                    <item/>
-                    <item>Who <em>buys</em> WonderWidgets</item>
-                </slide>
-
-            </slideshow>
-            "#,
-        },
+        include_str!("../assets/sample.xml"),
     )
 }
 
@@ -109,22 +81,70 @@ async fn html() -> impl IntoResponse {
             CONTENT_TYPE,
             HeaderValue::from_static(TEXT_HTML.essence_str()),
         )]),
-        indoc::indoc! {r#"
-<!DOCTYPE html>
-<html>
-  <head>
-  </head>
-  <body>
-      <h1>Herman Melville - Moby-Dick</h1>
-
-      <div>
-        <p>
-          Availing himself of the mild, summer-cool weather that now reigned in these latitudes, and in preparation for the peculiarly active pursuits shortly to be anticipated, Perth, the begrimed, blistered old blacksmith, had not removed his portable forge to the hold again, after concluding his contributory work for Ahab's leg, but still retained it on deck, fast lashed to ringbolts by the foremast; being now almost incessantly invoked by the headsmen, and harpooneers, and bowsmen to do some little job for them; altering, or repairing, or new shaping their various weapons and boat furniture. Often he would be surrounded by an eager circle, all waiting to be served; holding boat-spades, pike-heads, harpoons, and lances, and jealously watching his every sooty movement, as he toiled. Nevertheless, this old man's was a patient hammer wielded by a patient arm. No murmur, no impatience, no petulance did come from him. Silent, slow, and solemn; bowing over still further his chronically broken back, he toiled away, as if toil were life itself, and the heavy beating of his hammer the heavy beating of his heart. And so it was.—Most miserable! A peculiar walk in this old man, a certain slight but painful appearing yawing in his gait, had at an early period of the voyage excited the curiosity of the mariners. And to the importunity of their persisted questionings he had finally given in; and so it came to pass that every one now knew the shameful story of his wretched fate. Belated, and not innocently, one bitter winter's midnight, on the road running between two country towns, the blacksmith half-stupidly felt the deadly numbness stealing over him, and sought refuge in a leaning, dilapidated barn. The issue was, the loss of the extremities of both feet. Out of this revelation, part by part, at last came out the four acts of the gladness, and the one long, and as yet uncatastrophied fifth act of the grief of his life's drama. He was an old man, who, at the age of nearly sixty, had postponedly encountered that thing in sorrow's technicals called ruin. He had been an artisan of famed excellence, and with plenty to do; owned a house and garden; embraced a youthful, daughter-like, loving wife, and three blithe, ruddy children; every Sunday went to a cheerful-looking church, planted in a grove. But one night, under cover of darkness, and further concealed in a most cunning disguisement, a desperate burglar slid into his happy home, and robbed them all of everything. And darker yet to tell, the blacksmith himself did ignorantly conduct this burglar into his family's heart. It was the Bottle Conjuror! Upon the opening of that fatal cork, forth flew the fiend, and shrivelled up his home. Now, for prudent, most wise, and economic reasons, the blacksmith's shop was in the basement of his dwelling, but with a separate entrance to it; so that always had the young and loving healthy wife listened with no unhappy nervousness, but with vigorous pleasure, to the stout ringing of her young-armed old husband's hammer; whose reverberations, muffled by passing through the floors and walls, came up to her, not unsweetly, in her nursery; and so, to stout Labor's iron lullaby, the blacksmith's infants were rocked to slumber. Oh, woe on woe! Oh, Death, why canst thou not sometimes be timely? Hadst thou taken this old blacksmith to thyself ere his full ruin came upon him, then had the young widow had a delicious grief, and her orphans a truly venerable, legendary sire to dream of in their after years; and all of them a care-killing competency.
-        </p>
-      </div>
-  </body>
-</html>
-            "#,
-        },
+        include_str!("../assets/sample.html"),
     )
+}
+
+async fn image(headers: HeaderMap) -> impl IntoResponse {
+    let mime = headers
+        .get(axum::http::header::ACCEPT)
+        .and_then(|v| v.to_str().ok())
+        .map(|v| mime::MimeIter::new(v));
+
+    let unsupported_media_type = (
+        status::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+        Json(json!(
+        {
+          "status_code": 415,
+          "error": "Unsupported Media Type"
+        })),
+    )
+        .into_response();
+
+    if mime.is_none() {
+        return unsupported_media_type;
+    }
+
+    let mime = mime.unwrap();
+
+    for m in mime.filter_map(|m| m.ok()).filter(|it| it.type_() == IMAGE) {
+        match m.subtype().as_str() {
+            "jpeg" => return jpeg().await,
+            "svg" => return svg().await,
+            "png" => return png().await,
+            "webp" => return webp().await,
+            _ => continue,
+        }
+    }
+
+    return unsupported_media_type;
+}
+
+async fn jpeg() -> Response {
+    (
+        HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("image/jpeg"))]),
+        include_bytes!("../assets/jpeg.jpeg"),
+    )
+        .into_response()
+}
+async fn svg() -> Response {
+    (
+        HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("image/svg"))]),
+        include_bytes!("../assets/svg.svg"),
+    )
+        .into_response()
+}
+async fn png() -> Response {
+    (
+        HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("image/png"))]),
+        include_bytes!("../assets/png.png"),
+    )
+        .into_response()
+}
+async fn webp() -> Response {
+    (
+        HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("image/webp"))]),
+        include_bytes!("../assets/webp.webp"),
+    )
+        .into_response()
 }

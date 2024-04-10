@@ -1,9 +1,11 @@
-# rs-httpbin 
+# rs-httpbin
+
 A copy of [go-httpbin](https://github.com/mccutchen/go-httpbin), Just for learning Rust language.
 
 A rust port of the venerable httpbin.org HTTP request & response testing service.
 
 ## todo
+
 - [x] [/](/) This page.
 - [ ] /absolute-redirect/:n 302 Absolute redirects n times.
 - [ ] /anything/:anything Returns anything that is passed to request.
@@ -37,11 +39,11 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /hidden-basic-auth/:user/:passwd 404'd BasicAuth.
 - [x] [/html](/html) Renders an HTML Page.
 - [ ] /hostname Returns the name of the host serving the request.
-- [ ] /image Returns page containing an image based on sent Accept header.
-- [ ] /image/jpeg Returns a JPEG image.
-- [ ] /image/png Returns a PNG image.
-- [ ] /image/svg Returns a SVG image.
-- [ ] /image/webp Returns a WEBP image.
+- [x] [/image](/image) Returns page containing an image based on sent Accept header.
+- [x] [/image/jpeg](/image/jpeg) Returns a JPEG image.
+- [x] [/image/png](/image/png) Returns a PNG image.
+- [x] [/image/svg](/image/svg) Returns a SVG image.
+- [x] [/image/webp](/image/webp) Returns a WEBP image.
 - [ ] /ip Returns Origin IP.
 - [ ] [/json](/json) Returns JSON.
 - [ ] /links/:n Returns page containing n HTML links.
@@ -64,14 +66,3 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /uuid Generates a UUIDv4 value.
 - [ ] /websocket/echo?max_fragment_size=2048&max_message_size=10240 A WebSocket echo service.
 - [x] [/xml](/xml) Returns some XML
-
-<style>
-@media (prefers-color-scheme: dark) {
-  html, img, video, iframe {
-    filter: invert(1);
-  }
-  body {
-    background-color: white;
-  }
-}
-</style>
