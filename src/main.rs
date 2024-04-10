@@ -44,9 +44,7 @@ async fn main() {
 async fn index() -> Html<String> {
     let md = include_str!("../README.md");
     let mut options = Options::default();
-    // options.extension.tagfilter = true;
-    options.render.unsafe_ = true;
-    options.render.escape = false;
+    options.extension.tasklist = true;
     Html(
         comrak::markdown_to_html(md, &options)
             + (r#"
