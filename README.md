@@ -38,7 +38,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /dump/request Returns the given request in its HTTP/1.x wire approximate representation.
 - [ ] /encoding/utf8 Returns page containing UTF-8 data.
 - [ ] /etag/:etag Assumes the resource has the given etag and responds to If-None-Match header with a 200 or 304 and If-Match with a 200 or 412 as appropriate.
-- [ ] /forms/post HTML form that submits to /post
+- [x] [/forms/post](/forms/post) HTML form that submits to /post
 - [x] [/gzip](/gzip) Returns gzip-encoded data.
 - [x] [/headers](/headers) Returns request header dict.
 - [ ] /hidden-basic-auth/:user/:passwd 404'd BasicAuth.

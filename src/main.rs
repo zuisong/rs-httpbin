@@ -63,7 +63,8 @@ fn app() -> Router<()> {
         .route("/image/webp", get(webp))
         .route("/base64/:value", any(base64_decode))
         .route("/base64/encode/:value", any(base64_encode))
-        .route("/base64/decode/:value", any(base64_decode));
+        .route("/base64/decode/:value", any(base64_decode))
+        .route("/forms/post", any(forms_post));
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
@@ -311,4 +312,8 @@ async fn base64_encode(Path(data): Path<String>) -> impl IntoResponse {
         [(CONTENT_TYPE, HeaderValue::from_static(TEXT_PLAIN.as_ref()))],
         STANDARD.encode(data),
     )
+}
+
+async fn forms_post() -> impl IntoResponse {
+    Html(include_str!("../assets/forms_post.html"))
 }
