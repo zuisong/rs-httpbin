@@ -1,43 +1,52 @@
-use std::{collections::HashMap, future::Future, pin::Pin};
-
 use axum::{
     body::Body,
-    extract::connect_info::MockConnectInfo,
     http::{self, Request, StatusCode},
 };
-use axum_client_ip::SecureClientIpSource;
-use http_body_util::BodyExt as _;
+use hyper_util::client::legacy::Client;
 use serde_json::{json, Value};
 use tokio::net::TcpListener;
-use tower::{MakeService, Service, ServiceExt};
+use tower::ServiceExt;
 
 #[cfg(test)]
 use super::*;
+use crate::tests::ext::_BodyExt;
 
-pub trait _BodyExt {
-    fn body(self) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>>;
-    fn body_as_string(self) -> Pin<Box<dyn Future<Output = String> + Send>>;
-}
+pub mod ext {
+    use std::{future::Future, pin::Pin};
 
-impl<T> _BodyExt for T
-where
-    T: http_body::Body + Send + 'static,
-    T::Data: Send,
-    T::Error: std::fmt::Debug,
-{
-    fn body(self) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>> {
-        let fut = async { self.collect().await.unwrap().to_bytes().to_vec() };
-        Box::pin(fut)
+    use http_body_util::BodyExt as _;
+    use serde_json::Value;
+
+    pub trait _BodyExt {
+        fn body(self) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>>;
+        fn body_as_string(self) -> Pin<Box<dyn Future<Output = String> + Send>>;
+        fn body_as_json(self) -> Pin<Box<dyn Future<Output = Value> + Send>>;
     }
 
-    fn body_as_string(self) -> Pin<Box<dyn Future<Output = String> + Send>> {
-        let fut = async { String::from_utf8(self.body().await).unwrap() };
-        Box::pin(fut)
+    impl<T> _BodyExt for T
+    where
+        T: http_body::Body + Send + 'static,
+        T::Data: Send,
+        T::Error: std::fmt::Debug,
+    {
+        fn body(self) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>> {
+            let fut = async { self.collect().await.unwrap().to_bytes().to_vec() };
+            Box::pin(fut)
+        }
+
+        fn body_as_string(self) -> Pin<Box<dyn Future<Output = String> + Send>> {
+            let fut = async { String::from_utf8(self.body().await).unwrap() };
+            Box::pin(fut)
+        }
+
+        fn body_as_json(self) -> Pin<Box<dyn Future<Output = Value> + Send>> {
+            let fut = async { serde_json::from_slice(&*self.body().await).unwrap() };
+            Box::pin(fut)
+        }
     }
 }
-
 #[tokio::test]
-async fn hello_world() {
+async fn index() {
     let app = app();
 
     let response = app
@@ -51,7 +60,47 @@ async fn hello_world() {
     assert!(body.contains("rs-httpbin"));
 }
 
-#[tokio::test]
+mod image_test {
+    use axum::{
+        body::Body,
+        http::{Request, StatusCode},
+    };
+    use tower::ServiceExt;
+    use yare::parameterized;
+
+    use crate::*;
+
+    #[parameterized(
+    jpeg = { "jpeg" },
+    png = { "png" },
+    svg = { "svg" },
+    webp = { "webp" },
+    )]
+    #[test_macro(tokio::test)]
+    async fn image_type(type_: &str) {
+        let app = app();
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/image/{type_}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let body = response.headers().get(CONTENT_TYPE);
+        assert_eq!(
+            body,
+            (HeaderValue::try_from(format!("image/{type_}")).ok()).as_ref()
+        );
+    }
+}
+
+#[tokio::test()]
 async fn json() {
     let app = app();
 
@@ -71,8 +120,7 @@ async fn json() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = response.into_body().collect().await.unwrap().to_bytes();
-    let body: Value = serde_json::from_slice(&body).unwrap();
+    let body = response.body_as_json().await;
     assert_eq!(
         body,
         serde_json::from_str::<Value>(include_str!("../assets/sample.json")).unwrap()
@@ -98,37 +146,37 @@ async fn not_found() {
     assert!(body.is_empty());
 }
 
-// #[tokio::test]
-// async fn multiple_request() {
-//     let mut app = app().into_service();
-//     let request = Request::get("/get").body(Body::empty()).unwrap();
-//     let response = ServiceExt::<Request<Body>>::ready(&mut app)
-//         .await
-//         .unwrap()
-//         .call(request)
-//         .await
-//         .unwrap();
-//
-//     println!("{}", response.body_as_string().await)
-//     // assert_eq!(response.status(), StatusCode::OK);
-//
-//     // let request = Request::get("/").body(Body::empty()).unwrap();
-//     // let response = ServiceExt::<Request<Body>>::ready(&mut app)
-//     //     .await
-//     //     .unwrap()
-//     //     .call(request)
-//     //     .await
-//     //     .unwrap();
-//     // assert_eq!(response.status(), StatusCode::OK);
-// }
-//
-// #[tokio::test]
-// async fn with_into_make_service_with_connect_info() {
-//     let mut app = app()
-//         .layer(SecureClientIpSource::ConnectInfo.into_extension())
-//         .into_service();
-//
-//     let request = Request::builder().uri("/ip").body(Body::empty()).unwrap();
-//     let response = app.ready().await.unwrap().call(request).await.unwrap();
-//     assert_eq!(response.status(), StatusCode::OK);
-// }
+#[tokio::test]
+async fn the_real_deal() {
+    let listener = TcpListener::bind("0.0.0.0:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        axum::serve(
+            listener,
+            app().into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .await
+        .unwrap();
+    });
+
+    let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+
+    let response = client
+        .request(
+            Request::builder()
+                .uri(format!("http://{addr}/ip"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let body = response.body_as_json().await;
+    assert_eq!(
+        body,
+        serde_json::json! {
+            {"origin": "127.0.0.1"}
+        }
+    );
+}

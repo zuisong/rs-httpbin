@@ -3,6 +3,7 @@ use std::{collections::BTreeMap, net::SocketAddr};
 
 use axum::{
     body::Bytes,
+    extract::Path,
     http::{
         header::{ACCEPT_ENCODING, CONTENT_TYPE},
         status, HeaderMap, HeaderValue, Method, Uri,
@@ -18,9 +19,9 @@ use axum_extra::{
     response::ErasedJson,
     TypedHeader,
 };
-use base64::Engine;
+use base64::{engine::general_purpose::STANDARD, Engine};
 use data::{Http, Ip};
-use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML, TEXT_XML};
+use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML, TEXT_PLAIN, TEXT_XML};
 use tower_http::{
     compression::CompressionLayer,
     cors::{Any, CorsLayer},
@@ -34,7 +35,7 @@ mod data;
 mod tests;
 
 fn app() -> Router<()> {
-    Router::new()
+    let mut router = Router::new()
         .route("/", get(index))
         //
         .route("/delete", delete(anything))
@@ -53,46 +54,6 @@ fn app() -> Router<()> {
         .route("/headers", any(headers))
         .route("/json", get(json))
         .route("/xml", get(xml))
-        .route(
-            "/gzip",
-            get(anything).layer((
-                SetRequestHeaderLayer::if_not_present(
-                    ACCEPT_ENCODING,
-                    HeaderValue::from_static("gzip"),
-                ),
-                CompressionLayer::new(),
-            )),
-        )
-        .route(
-            "/zstd",
-            get(anything).layer((
-                SetRequestHeaderLayer::if_not_present(
-                    ACCEPT_ENCODING,
-                    HeaderValue::from_static("zstd"),
-                ),
-                CompressionLayer::new(),
-            )),
-        )
-        .route(
-            "/br",
-            get(anything).layer((
-                SetRequestHeaderLayer::if_not_present(
-                    ACCEPT_ENCODING,
-                    HeaderValue::from_static("br"),
-                ),
-                CompressionLayer::new(),
-            )),
-        )
-        .route(
-            "/deflate",
-            get(anything).layer((
-                SetRequestHeaderLayer::if_not_present(
-                    ACCEPT_ENCODING,
-                    HeaderValue::from_static("deflate"),
-                ),
-                CompressionLayer::new(),
-            )),
-        )
         .route("/ip", get(ip))
         .route("/html", get(html))
         .route("/image", get(image))
@@ -100,6 +61,24 @@ fn app() -> Router<()> {
         .route("/image/svg", get(svg))
         .route("/image/png", get(png))
         .route("/image/webp", get(webp))
+        .route("/base64/:value", any(base64_decode))
+        .route("/base64/encode/:value", any(base64_encode))
+        .route("/base64/decode/:value", any(base64_decode));
+
+    for format in ["gzip", "zstd", "br", "deflate"] {
+        router = router.route(
+            format!("/{format}").as_str(),
+            get(anything).layer((
+                SetRequestHeaderLayer::if_not_present(
+                    ACCEPT_ENCODING,
+                    HeaderValue::from_static(format),
+                ),
+                CompressionLayer::new(),
+            )),
+        );
+    }
+
+    router
 }
 
 #[tokio::main]
@@ -140,6 +119,7 @@ async fn user_agent(user_agent: Option<TypedHeader<UserAgent>>) -> impl IntoResp
             .unwrap_or("".to_string()),
     })
 }
+
 async fn headers(header_map: HeaderMap) -> impl IntoResponse {
     ErasedJson::pretty(data::Headers {
         headers: get_headers(&header_map),
@@ -177,7 +157,7 @@ async fn anything(
 
     let body_string = match String::from_utf8(body.to_vec()) {
         Ok(body) => body,
-        Err(_) => base64::engine::general_purpose::STANDARD.encode(&body),
+        Err(_) => STANDARD.encode(&body),
     };
 
     let json = content_type.and_then(|TypedHeader(content_type)| {
@@ -223,7 +203,7 @@ async fn index() -> Html<String> {
 
 async fn json() -> impl IntoResponse {
     (
-        HeaderMap::from_iter([(
+        ([(
             CONTENT_TYPE,
             HeaderValue::from_static(APPLICATION_JSON.essence_str()),
         )]),
@@ -233,7 +213,7 @@ async fn json() -> impl IntoResponse {
 
 async fn xml() -> impl IntoResponse {
     (
-        HeaderMap::from_iter([(
+        ([(
             CONTENT_TYPE,
             HeaderValue::from_static(TEXT_XML.essence_str()),
         )]),
@@ -243,7 +223,7 @@ async fn xml() -> impl IntoResponse {
 
 async fn html() -> impl IntoResponse {
     (
-        HeaderMap::from_iter([(
+        ([(
             CONTENT_TYPE,
             HeaderValue::from_static(TEXT_HTML.essence_str()),
         )]),
@@ -280,36 +260,55 @@ async fn image(headers: HeaderMap) -> impl IntoResponse {
 
 async fn jpeg() -> Response {
     (
-        HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("image/jpeg"))]),
+        [(CONTENT_TYPE, HeaderValue::from_static("image/jpeg"))],
         include_bytes!("../assets/jpeg.jpeg"),
     )
         .into_response()
 }
+
 async fn svg() -> Response {
     (
-        HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("image/svg"))]),
+        [(CONTENT_TYPE, HeaderValue::from_static("image/svg"))],
         include_bytes!("../assets/svg.svg"),
     )
         .into_response()
 }
+
 async fn png() -> Response {
     (
-        HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("image/png"))]),
+        [(CONTENT_TYPE, HeaderValue::from_static("image/png"))],
         include_bytes!("../assets/png.png"),
     )
         .into_response()
 }
+
 async fn webp() -> Response {
     (
-        HeaderMap::from_iter([(CONTENT_TYPE, HeaderValue::from_static("image/webp"))]),
+        [(CONTENT_TYPE, HeaderValue::from_static("image/webp"))],
         include_bytes!("../assets/webp.webp"),
     )
         .into_response()
 }
 
-async fn ip(InsecureClientIp(origin): InsecureClientIp) -> Response {
+async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
     ErasedJson::pretty(Ip {
         origin: origin.to_string(),
     })
     .into_response()
+}
+
+async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
+    (
+        [(CONTENT_TYPE, HeaderValue::from_static(TEXT_PLAIN.as_ref()))],
+        STANDARD
+            .decode(base64_data)
+            .unwrap_or_else(|e| e.to_string().into_bytes()),
+    )
+}
+
+async fn base64_encode(Path(data): Path<String>) -> impl IntoResponse {
+    (
+        [(CONTENT_TYPE, HeaderValue::from_static(TEXT_PLAIN.as_ref()))],
+        STANDARD.encode(data),
+    )
 }

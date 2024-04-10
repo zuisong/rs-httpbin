@@ -17,9 +17,9 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/put](/put) Returns request data. Allows only PUT requests.
 - [x] [/trace](/trace) Returns request data. Allows only TRACE requests.
 - [ ] /absolute-redirect/:n 302 Absolute redirects n times.
-- [ ] /base64/:value Decodes a Base64-encoded string.
-- [ ] /base64/decode/:value Explicit URL for decoding a Base64 encoded string.
-- [ ] /base64/encode/:value Encodes a string into URL-safe Base64.
+- [x] [/base64/:value](/base64/aGVsbG8K) Decodes a Base64-encoded string.
+- [x] [/base64/decode/:value](/base64/decode/aGVsbG8K) Explicit URL for decoding a Base64 encoded string.
+- [x] [/base64/encode/:value](/base64/encode/hello) Encodes a string into URL-safe Base64.
 - [ ] /basic-auth/:user/:passwd Challenges HTTPBasic Auth.
 - [ ] /bearer Checks Bearer token header - returns 401 if not set.
 - [x] [/br](/br) Returns brotli-encoded data.
