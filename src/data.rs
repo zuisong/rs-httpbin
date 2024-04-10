@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 use serde::Serialize;
 
 #[derive(Serialize)]
 pub struct Headers {
-    pub(crate) headers: HashMap<String, Vec<String>>,
+    pub(crate) headers: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Serialize)]
@@ -22,9 +22,9 @@ pub struct UserAgent {
 pub struct Http {
     pub method: String,
     pub uri: String,
-    pub headers: HashMap<String, Vec<String>>,
+    pub headers: BTreeMap<String, Vec<String>>,
     pub origin: String,
-    pub args: HashMap<String, Vec<String>>,
+    pub args: BTreeMap<String, Vec<String>>,
     pub data: String,
     pub json: Option<serde_json::Value>,
     // todo

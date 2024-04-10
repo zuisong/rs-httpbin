@@ -1,4 +1,5 @@
-use std::{collections::HashMap, net::SocketAddr};
+#[deny(unused_imports)]
+use std::{collections::BTreeMap, net::SocketAddr};
 
 use axum::{
     body::Bytes,
@@ -82,8 +83,8 @@ async fn headers(header_map: HeaderMap) -> impl IntoResponse {
     })
 }
 
-fn get_headers(header_map: &HeaderMap) -> HashMap<String, Vec<String>> {
-    let mut headers = HashMap::new();
+fn get_headers(header_map: &HeaderMap) -> BTreeMap<String, Vec<String>> {
+    let mut headers = BTreeMap::new();
     for key in header_map.keys() {
         let header_values: Vec<_> = header_map
             .get_all(key)
@@ -103,7 +104,7 @@ fn get_headers(header_map: &HeaderMap) -> HashMap<String, Vec<String>> {
 async fn anything(
     method: Method,
     uri: Uri,
-    Query(query): Query<HashMap<String, Vec<String>>>,
+    Query(query): Query<BTreeMap<String, Vec<String>>>,
     header_map: HeaderMap,
     content_type: Option<TypedHeader<ContentType>>,
     InsecureClientIp(origin): InsecureClientIp,
