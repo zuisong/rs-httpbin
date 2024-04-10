@@ -1,16 +1,29 @@
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr};
 
-use axum::extract::ConnectInfo;
-use axum::http::header::CONTENT_TYPE;
-use axum::http::{status, HeaderMap, HeaderValue};
-use axum::response::{Html, IntoResponse, Response};
-use axum::Json;
-use axum::{routing::get, Router};
+use axum::{
+    body::Bytes,
+    extract::RawQuery,
+    http::{header::CONTENT_TYPE, status, HeaderMap, HeaderValue, Method, Uri},
+    response::{Html, IntoResponse, Response},
+    routing::{any, delete, get, head, options, patch, post, put, trace},
+    Router,
+};
+use axum_client_ip::InsecureClientIp;
+use axum_extra::{
+    headers::{ContentType, UserAgent},
+    response::ErasedJson,
+    TypedHeader,
+};
+use base64::Engine;
 use comrak::Options;
+use data::{Http, Ip};
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML, TEXT_XML};
-use serde_json::json;
-use tower_http::cors::{Any, CorsLayer};
-use tower_http::trace::TraceLayer;
+use tower_http::{
+    cors::{Any, CorsLayer},
+    trace::TraceLayer,
+};
+
+mod data;
 
 #[tokio::main]
 async fn main() {
@@ -20,6 +33,21 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(index))
+        //
+        .route("/delete", delete(anything))
+        .route("/get", get(anything))
+        .route("/head", head(anything))
+        .route("/options", options(anything))
+        .route("/patch", patch(anything))
+        .route("/post", post(anything))
+        .route("/put", put(anything))
+        .route("/trace", trace(anything))
+        //
+        .route("/anything", any(anything))
+        .route("/anything/*{id}", any(anything))
+        //
+        .route("/user-agent", any(user_agent))
+        .route("/headers", any(headers))
         .route("/json", get(json))
         .route("/xml", get(xml))
         .route("/ip", get(ip))
@@ -39,6 +67,78 @@ async fn main() {
     )
     .await
     .unwrap();
+}
+
+async fn user_agent(user_agent: Option<TypedHeader<UserAgent>>) -> impl IntoResponse {
+    ErasedJson::pretty(data::UserAgent {
+        user_agent: user_agent
+            .map(|h| h.0.to_string())
+            .unwrap_or("".to_string()),
+    })
+}
+async fn headers(header_map: HeaderMap) -> impl IntoResponse {
+    ErasedJson::pretty(data::Headers {
+        headers: get_headers(&header_map),
+    })
+}
+
+fn get_headers(header_map: &HeaderMap) -> HashMap<String, Vec<String>> {
+    let mut headers = HashMap::new();
+    for key in header_map.keys() {
+        let header_values: Vec<_> = header_map
+            .get_all(key)
+            .iter()
+            .map(|v| {
+                v.to_str()
+                    .map(|v| v.to_string())
+                    .unwrap_or_else(|err| err.to_string())
+            })
+            .collect();
+
+        headers.insert(key.to_string(), header_values);
+    }
+    headers
+}
+
+async fn anything(
+    method: Method,
+    uri: Uri,
+    query: RawQuery,
+    header_map: HeaderMap,
+    content_type: Option<TypedHeader<ContentType>>,
+    InsecureClientIp(origin): InsecureClientIp,
+    body: Bytes,
+) -> Response {
+    let headers = get_headers(&header_map);
+
+    let query = query.0.map(|query_str| {
+        serde_qs::from_str(&query_str)
+            .unwrap_or_else(|err| [("error".to_string(), err.to_string())].into())
+    });
+
+    let body_string = match String::from_utf8(body.to_vec()) {
+        Ok(body) => body,
+        Err(_) => base64::engine::general_purpose::STANDARD.encode(&body),
+    };
+
+    let json = content_type.and_then(|TypedHeader(content_type)| {
+        if content_type == ContentType::json() {
+            serde_json::from_slice(&body).ok()
+        } else {
+            None
+        }
+    });
+
+    ErasedJson::pretty(Http {
+        method: method.to_string(),
+        uri: uri.to_string(),
+        headers,
+        origin: origin.to_string(),
+        args: query,
+        data: body_string,
+        json,
+    })
+    .into_response()
 }
 
 async fn index() -> Html<String> {
@@ -96,17 +196,9 @@ async fn image(headers: HeaderMap) -> impl IntoResponse {
     let mime = headers
         .get(axum::http::header::ACCEPT)
         .and_then(|v| v.to_str().ok())
-        .map(|v| mime::MimeIter::new(v));
+        .map(mime::MimeIter::new);
 
-    let unsupported_media_type = (
-        status::StatusCode::UNSUPPORTED_MEDIA_TYPE,
-        Json(json!(
-        {
-          "status_code": 415,
-          "error": "Unsupported Media Type"
-        })),
-    )
-        .into_response();
+    let unsupported_media_type = status::StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response();
 
     if mime.is_none() {
         return unsupported_media_type;
@@ -124,7 +216,7 @@ async fn image(headers: HeaderMap) -> impl IntoResponse {
         }
     }
 
-    return unsupported_media_type;
+    unsupported_media_type
 }
 
 async fn jpeg() -> Response {
@@ -156,12 +248,9 @@ async fn webp() -> Response {
         .into_response()
 }
 
-async fn ip(ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Response {
-    let ip = addr.ip();
-    Json(json!(
-        {
-            "origin": ip.to_string(),
-        }
-    ))
+async fn ip(InsecureClientIp(origin): InsecureClientIp) -> Response {
+    ErasedJson::pretty(Ip {
+        origin: origin.to_string(),
+    })
     .into_response()
 }
