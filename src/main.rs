@@ -3,7 +3,10 @@ use std::{collections::BTreeMap, net::SocketAddr};
 
 use axum::{
     body::Bytes,
-    http::{header::CONTENT_TYPE, status, HeaderMap, HeaderValue, Method, Uri},
+    http::{
+        header::{ACCEPT_ENCODING, CONTENT_TYPE},
+        status, HeaderMap, HeaderValue, Method, Uri,
+    },
     response::{Html, IntoResponse, Response},
     routing::{any, delete, get, head, options, patch, post, put, trace},
     Router,
@@ -16,13 +19,15 @@ use axum_extra::{
     TypedHeader,
 };
 use base64::Engine;
-use comrak::Options;
 use data::{Http, Ip};
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML, TEXT_XML};
 use tower_http::{
+    compression::CompressionLayer,
     cors::{Any, CorsLayer},
+    set_header::SetRequestHeaderLayer,
     trace::TraceLayer,
 };
+use tracing::Level;
 
 mod data;
 #[cfg(test)]
@@ -48,6 +53,46 @@ fn app() -> Router<()> {
         .route("/headers", any(headers))
         .route("/json", get(json))
         .route("/xml", get(xml))
+        .route(
+            "/gzip",
+            get(anything).layer((
+                SetRequestHeaderLayer::if_not_present(
+                    ACCEPT_ENCODING,
+                    HeaderValue::from_static("gzip"),
+                ),
+                CompressionLayer::new(),
+            )),
+        )
+        .route(
+            "/zstd",
+            get(anything).layer((
+                SetRequestHeaderLayer::if_not_present(
+                    ACCEPT_ENCODING,
+                    HeaderValue::from_static("zstd"),
+                ),
+                CompressionLayer::new(),
+            )),
+        )
+        .route(
+            "/br",
+            get(anything).layer((
+                SetRequestHeaderLayer::if_not_present(
+                    ACCEPT_ENCODING,
+                    HeaderValue::from_static("br"),
+                ),
+                CompressionLayer::new(),
+            )),
+        )
+        .route(
+            "/deflate",
+            get(anything).layer((
+                SetRequestHeaderLayer::if_not_present(
+                    ACCEPT_ENCODING,
+                    HeaderValue::from_static("deflate"),
+                ),
+                CompressionLayer::new(),
+            )),
+        )
         .route("/ip", get(ip))
         .route("/html", get(html))
         .route("/image", get(image))
@@ -60,12 +105,23 @@ fn app() -> Router<()> {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::DEBUG)
-        .init();
+        .with_max_level(tracing::Level::INFO)
+        .pretty()
+        .try_init()
+        .ok();
 
     let router: Router = app();
     let app = router
-        .layer(TraceLayer::new_for_http())
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(Level::INFO))
+                .on_request(tower_http::trace::DefaultOnRequest::new().level(Level::INFO))
+                .on_response(
+                    tower_http::trace::DefaultOnResponse::new()
+                        .level(Level::INFO)
+                        .include_headers(true),
+                ),
+        )
         .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
 
@@ -146,7 +202,7 @@ async fn anything(
 
 async fn index() -> Html<String> {
     let md = include_str!("../README.md");
-    let mut options = Options::default();
+    let mut options = comrak::Options::default();
     options.extension.tasklist = true;
     Html(
         comrak::markdown_to_html(md, &options)

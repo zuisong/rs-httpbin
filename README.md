@@ -22,14 +22,14 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /base64/encode/:value Encodes a string into URL-safe Base64.
 - [ ] /basic-auth/:user/:passwd Challenges HTTPBasic Auth.
 - [ ] /bearer Checks Bearer token header - returns 401 if not set.
-- [ ] /brotli Returns brotli-encoded data.
+- [x] [/br](/br) Returns brotli-encoded data.
 - [ ] /bytes/:n Generates n random bytes of binary data, accepts optional seed integer parameter.
 - [ ] /cache Returns 200 unless an If-Modified-Since or If-None-Match header is provided, when it returns a 304.
 - [ ] /cache/:n Sets a Cache-Control header for n seconds.
 - [ ] /cookies Returns cookie data.
 - [ ] /cookies/delete?name Deletes one or more simple cookies.
 - [ ] /cookies/set?name=value Sets one or more simple cookies.
-- [ ] /deflate Returns deflate-encoded data.
+- [x] [/deflate](/deflate) Returns deflate-encoded data.
 - [ ] /delay/:n Delays responding for min(n, 10) seconds.
 - [ ] /deny Denied by robots.txt file.
 - [ ] /digest-auth/:qop/:user/:passwd/:algorithm Challenges HTTP Digest Auth.
@@ -39,7 +39,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /encoding/utf8 Returns page containing UTF-8 data.
 - [ ] /etag/:etag Assumes the resource has the given etag and responds to If-None-Match header with a 200 or 304 and If-Match with a 200 or 412 as appropriate.
 - [ ] /forms/post HTML form that submits to /post
-- [ ] /gzip Returns gzip-encoded data.
+- [x] [/gzip](/gzip) Returns gzip-encoded data.
 - [x] [/headers](/headers) Returns request header dict.
 - [ ] /hidden-basic-auth/:user/:passwd 404'd BasicAuth.
 - [x] [/html](/html) Renders an HTML Page.
@@ -68,3 +68,4 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /uuid Generates a UUIDv4 value.
 - [ ] /websocket/echo?max_fragment_size=2048&max_message_size=10240 A WebSocket echo service.
 - [x] [/xml](/xml) Returns some XML
+- [x] [/zstd](/zstd) Returns zstd-encoded data.
