@@ -13,7 +13,6 @@ tracing-subscriber = { features = ["tracing", "env-filter", "tracing-log"], vers
 tracing = "0.1.40"
 tower-http = { version = "0.5.2", features = ["tracing", "trace", "cors"] }
 mime = "0.3.17"
-axum-extra = { version = "0.9.3", features = ["typed-header", "erased-json"] }
+axum-extra = { version = "0.9.3", features = ["typed-header", "erased-json", "query"] }
 axum-client-ip = "0.6.0"
-serde_qs = "0.13.0"
 base64 = "0.22.0"

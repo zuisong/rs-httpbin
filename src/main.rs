@@ -2,7 +2,6 @@ use std::{collections::HashMap, net::SocketAddr};
 
 use axum::{
     body::Bytes,
-    extract::RawQuery,
     http::{header::CONTENT_TYPE, status, HeaderMap, HeaderValue, Method, Uri},
     response::{Html, IntoResponse, Response},
     routing::{any, delete, get, head, options, patch, post, put, trace},
@@ -10,6 +9,7 @@ use axum::{
 };
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
+    extract::Query,
     headers::{ContentType, UserAgent},
     response::ErasedJson,
     TypedHeader,
@@ -103,18 +103,13 @@ fn get_headers(header_map: &HeaderMap) -> HashMap<String, Vec<String>> {
 async fn anything(
     method: Method,
     uri: Uri,
-    query: RawQuery,
+    Query(query): Query<HashMap<String, Vec<String>>>,
     header_map: HeaderMap,
     content_type: Option<TypedHeader<ContentType>>,
     InsecureClientIp(origin): InsecureClientIp,
     body: Bytes,
 ) -> Response {
     let headers = get_headers(&header_map);
-
-    let query = query.0.map(|query_str| {
-        serde_qs::from_str(&query_str)
-            .unwrap_or_else(|err| [("error".to_string(), err.to_string())].into())
-    });
 
     let body_string = match String::from_utf8(body.to_vec()) {
         Ok(body) => body,

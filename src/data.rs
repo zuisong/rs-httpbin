@@ -24,7 +24,7 @@ pub struct Http {
     pub uri: String,
     pub headers: HashMap<String, Vec<String>>,
     pub origin: String,
-    pub args: Option<HashMap<String, String>>,
+    pub args: HashMap<String, Vec<String>>,
     pub data: String,
     pub json: Option<serde_json::Value>,
     // todo
