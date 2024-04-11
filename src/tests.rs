@@ -11,7 +11,7 @@ use tower::ServiceExt;
 
 #[cfg(test)]
 use super::*;
-use crate::tests::ext::_BodyExt;
+use crate::tests::ext::BodyExt as _;
 
 pub mod ext {
     use std::{future::Future, pin::Pin};
@@ -19,13 +19,13 @@ pub mod ext {
     use http_body_util::BodyExt as _;
     use serde_json::Value;
 
-    pub trait _BodyExt {
+    pub trait BodyExt {
         fn body(self) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>>;
         fn body_as_string(self) -> Pin<Box<dyn Future<Output = String> + Send>>;
         fn body_as_json(self) -> Pin<Box<dyn Future<Output = Value> + Send>>;
     }
 
-    impl<T> _BodyExt for T
+    impl<T> BodyExt for T
     where
         T: http_body::Body + Send + 'static,
         T::Data: Send,

@@ -59,7 +59,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /relative-redirect/:n 302 Relative redirects n times.
 - [ ] /response-headers?key=val Returns given response headers.
 - [ ] /robots.txt Returns some robots.txt rules.
-- [ ] /sse?delay=1s&duration=5s&count=10 a stream of server-sent events.
+- [x] [/sse](/sse?delay=1s&duration=3s&count=10) a stream of server-sent events.
 - [ ] /status/:code Returns given HTTP Status code.
 - [ ] /stream-bytes/:n Streams n random bytes of binary data, accepts optional seed and chunk_size integer parameters.
 - [ ] /stream/:n Streams min(n, 100) lines.

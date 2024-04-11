@@ -1,5 +1,8 @@
-#[deny(unused_imports)]
-use std::{collections::BTreeMap, net::SocketAddr};
+use std::{
+    collections::BTreeMap,
+    net::SocketAddr,
+    time::{Duration, UNIX_EPOCH},
+};
 
 use axum::{
     body::Bytes,
@@ -8,7 +11,7 @@ use axum::{
         header::{ACCEPT_ENCODING, CONTENT_TYPE},
         status, HeaderMap, HeaderValue, Method, Uri,
     },
-    response::{Html, IntoResponse, Response},
+    response::{sse::Event, Html, IntoResponse, Response, Sse},
     routing::{any, delete, get, head, options, patch, post, put, trace},
     Router,
 };
@@ -20,8 +23,9 @@ use axum_extra::{
     TypedHeader,
 };
 use base64::{engine::general_purpose::STANDARD, Engine};
-use data::{Http, Ip};
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML, TEXT_PLAIN, TEXT_XML};
+use serde::{Deserialize, Serialize};
+use tokio_stream::StreamExt;
 use tower_http::{
     compression::CompressionLayer,
     cors::{Any, CorsLayer},
@@ -65,6 +69,7 @@ fn app() -> Router<()> {
         .route("/base64/encode/:value", any(base64_encode))
         .route("/base64/decode/:value", any(base64_decode))
         .route("/forms/post", any(forms_post))
+        .route("/sse", any(sse_handler))
         //keepme
         ;
 
@@ -92,20 +97,20 @@ async fn main() {
         .ok();
 
     let router: Router = app();
-    let app = router
-        .layer(
-            TraceLayer::new_for_http()
-                .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(Level::INFO))
-                .on_request(tower_http::trace::DefaultOnRequest::new().level(Level::INFO))
-                .on_response(
-                    tower_http::trace::DefaultOnResponse::new()
-                        .level(Level::INFO)
-                        .include_headers(true),
-                ),
-        )
-        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any));
+    let app = router.layer((
+        TraceLayer::new_for_http()
+            .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(Level::INFO))
+            .on_request(tower_http::trace::DefaultOnRequest::new().level(Level::INFO))
+            .on_response(
+                tower_http::trace::DefaultOnResponse::new()
+                    .level(Level::INFO)
+                    .include_headers(true),
+            ),
+        CorsLayer::new().allow_origin(Any).allow_methods(Any),
+        // CompressionLayer::default(),
+    ));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-
+    println!("Listening on http://{}", listener.local_addr().unwrap());
     axum::serve(
         listener,
         app.into_make_service_with_connect_info::<SocketAddr>(),
@@ -170,7 +175,7 @@ async fn anything(
         }
     });
 
-    ErasedJson::pretty(Http {
+    ErasedJson::pretty(data::Http {
         method: method.to_string(),
         uri: uri.to_string(),
         headers,
@@ -205,30 +210,30 @@ async fn index() -> Html<String> {
 
 async fn json() -> impl IntoResponse {
     (
-        ([(
+        [(
             CONTENT_TYPE,
             HeaderValue::from_static(APPLICATION_JSON.essence_str()),
-        )]),
+        )],
         include_str!("../assets/sample.json"),
     )
 }
 
 async fn xml() -> impl IntoResponse {
     (
-        ([(
+        [(
             CONTENT_TYPE,
             HeaderValue::from_static(TEXT_XML.essence_str()),
-        )]),
+        )],
         include_str!("../assets/sample.xml"),
     )
 }
 
 async fn html() -> impl IntoResponse {
     (
-        ([(
+        [(
             CONTENT_TYPE,
             HeaderValue::from_static(TEXT_HTML.essence_str()),
-        )]),
+        )],
         include_str!("../assets/sample.html"),
     )
 }
@@ -293,7 +298,7 @@ async fn webp() -> Response {
 }
 
 async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
-    ErasedJson::pretty(Ip { origin }).into_response()
+    ErasedJson::pretty(data::Ip { origin }).into_response()
 }
 
 async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
@@ -314,4 +319,36 @@ async fn base64_encode(Path(data): Path<String>) -> impl IntoResponse {
 
 async fn forms_post() -> impl IntoResponse {
     Html(include_str!("../assets/forms_post.html"))
+}
+
+#[derive(Deserialize, Serialize, Default)]
+struct SeeParam {
+    pub count: Option<usize>,
+    #[serde(with = "humantime_serde")]
+    pub duration: Option<Duration>,
+    #[serde(with = "humantime_serde")]
+    pub delay: Option<Duration>,
+}
+
+async fn sse_handler(
+    Query(SeeParam {
+        delay,
+        duration,
+        count,
+    }): Query<SeeParam>,
+) -> Response {
+    tokio::time::sleep(delay.unwrap_or(Duration::ZERO)).await;
+
+    let stream = tokio_stream::iter(1..)
+        .take(count.unwrap_or(10_usize))
+        .map(|id| {
+            let timestamp = UNIX_EPOCH.elapsed().unwrap_or_default().as_millis();
+            Event::default()
+                .data(serde_json::to_string(&data::SseData { id, timestamp }).unwrap_or_default())
+                .event("ping")
+                .try_into()
+        })
+        .throttle(duration.unwrap_or(Duration::from_secs(1)));
+
+    Sse::new(stream).into_response()
 }

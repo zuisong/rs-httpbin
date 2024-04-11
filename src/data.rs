@@ -31,3 +31,9 @@ pub struct Http {
     // files
     // form
 }
+
+#[derive(Serialize)]
+pub struct SseData {
+    pub id: i32,
+    pub timestamp: u128,
+}
