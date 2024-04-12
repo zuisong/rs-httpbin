@@ -64,7 +64,9 @@ fn app() -> Router<()> {
         .route("/base64/:value", any(base64_decode))
         .route("/base64/encode/:value", any(base64_encode))
         .route("/base64/decode/:value", any(base64_decode))
-        .route("/forms/post", any(forms_post));
+        .route("/forms/post", any(forms_post))
+        //keepme
+        ;
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
@@ -172,7 +174,7 @@ async fn anything(
         method: method.to_string(),
         uri: uri.to_string(),
         headers,
-        origin: origin.to_string(),
+        origin,
         args: query,
         data: body_string,
         json,
@@ -291,10 +293,7 @@ async fn webp() -> Response {
 }
 
 async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
-    ErasedJson::pretty(Ip {
-        origin: origin.to_string(),
-    })
-    .into_response()
+    ErasedJson::pretty(Ip { origin }).into_response()
 }
 
 async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {

@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, net::IpAddr};
 
 use serde::Serialize;
 
@@ -9,7 +9,7 @@ pub struct Headers {
 
 #[derive(Serialize)]
 pub struct Ip {
-    pub origin: String,
+    pub origin: IpAddr,
 }
 
 #[derive(Serialize)]
@@ -23,7 +23,7 @@ pub struct Http {
     pub method: String,
     pub uri: String,
     pub headers: BTreeMap<String, Vec<String>>,
-    pub origin: String,
+    pub origin: IpAddr,
     pub args: BTreeMap<String, Vec<String>>,
     pub data: String,
     pub json: Option<serde_json::Value>,

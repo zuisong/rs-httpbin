@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use axum::{
     body::Body,
     http::{self, Request, StatusCode},
@@ -123,7 +125,7 @@ async fn json() {
     let body = response.body_as_json().await;
     assert_eq!(
         body,
-        serde_json::from_str::<Value>(include_str!("../assets/sample.json")).unwrap()
+        Value::from_str(include_str!("../assets/sample.json")).unwrap()
     );
 }
 
