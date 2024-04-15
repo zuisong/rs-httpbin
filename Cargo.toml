@@ -36,7 +36,7 @@ tower-http = { version = "0.5.2", features = [
 ] }
 humantime-serde = "1.1.1"
 tokio-stream = { version = "0.1.15",features = ["tokio-util"] }
-futures = { version = "0.3.30",features = ["default","futures-executor"] }
+futures = { version = "0.3.30",features = ["default"] }
 
 
 [dev-dependencies]

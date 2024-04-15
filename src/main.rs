@@ -8,8 +8,8 @@ use axum::{
     body::Bytes,
     extract::Path,
     http::{
-        header::{ACCEPT_ENCODING, CONTENT_TYPE},
-        status, HeaderMap, HeaderValue, Method, Uri,
+        header::{ACCEPT_ENCODING, CONTENT_TYPE, LOCATION},
+        status, HeaderMap, HeaderValue, Method, StatusCode, Uri,
     },
     response::{sse::Event, Html, IntoResponse, Response, Sse},
     routing::{any, delete, get, head, options, patch, post, put, trace},
@@ -25,6 +25,7 @@ use axum_extra::{
 use base64::{engine::general_purpose::STANDARD, Engine};
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML, TEXT_PLAIN, TEXT_XML};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio_stream::StreamExt;
 use tower_http::{
     compression::CompressionLayer,
@@ -53,6 +54,8 @@ fn app() -> Router<()> {
         //
         .route("/anything", any(anything))
         .route("/anything/*{id}", any(anything))
+        //
+        .route("/absolute-redirect/:n", any(redirect))
         //
         .route("/user-agent", any(user_agent))
         .route("/headers", any(headers))
@@ -299,6 +302,28 @@ async fn webp() -> Response {
 
 async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
     ErasedJson::pretty(data::Ip { origin }).into_response()
+}
+
+async fn redirect(Path(n): Path<usize>) -> Response {
+    if n <= 0 {
+        return (
+            StatusCode::BAD_REQUEST,
+            ErasedJson::pretty(json!({
+                "status_code": 400,
+                "error": "Bad Request",
+                "detail": "redirect count must be > 0"
+            })),
+        )
+            .into_response();
+    }
+    if n == 1 {
+        return (StatusCode::FOUND, [(LOCATION, "/get")]).into_response();
+    }
+    return (
+        StatusCode::FOUND,
+        [(LOCATION, format!("/absolute-redirect/{}", n - 1))],
+    )
+        .into_response();
 }
 
 async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {

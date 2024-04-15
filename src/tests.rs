@@ -73,10 +73,10 @@ mod image_test {
     use crate::*;
 
     #[parameterized(
-    jpeg = { "jpeg" },
-    png = { "png" },
-    svg = { "svg" },
-    webp = { "webp" },
+        jpeg = { "jpeg" },
+        png = { "png" },
+        svg = { "svg" },
+        webp = { "webp" },
     )]
     #[test_macro(tokio::test)]
     async fn image_type(type_: &str) {

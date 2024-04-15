@@ -16,7 +16,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/post](/post) Returns request data. Allows only POST requests.
 - [x] [/put](/put) Returns request data. Allows only PUT requests.
 - [x] [/trace](/trace) Returns request data. Allows only TRACE requests.
-- [ ] /absolute-redirect/:n 302 Absolute redirects n times.
+- [x] [/absolute-redirect/:n](/absolute-redirect/3) 302 Absolute redirects n times.
 - [x] [/base64/:value](/base64/aGVsbG8K) Decodes a Base64-encoded string.
 - [x] [/base64/decode/:value](/base64/decode/aGVsbG8K) Explicit URL for decoding a Base64 encoded string.
 - [x] [/base64/encode/:value](/base64/encode/hello) Encodes a string into URL-safe Base64.
