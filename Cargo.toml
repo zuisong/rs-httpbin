@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 axum = { version = "0.7.5", features = ["http2"] }
 comrak = { version = "0.22.0", default-features = false }
-serde = { version = "1.0.197", features = ["derive"] }
-serde_json = { version = "1.0.115" }
+serde = { version = "1.0.198", features = ["derive"] }
+serde_json = { version = "1.0.116" }
 tokio = { version = "1.37.0", features = ["rt-multi-thread"] }
 tracing-subscriber = { version = "0.3.18", features = [
   "tracing",
@@ -35,8 +35,8 @@ tower-http = { version = "0.5.2", features = [
   "set-header",
 ] }
 humantime-serde = "1.1.1"
-tokio-stream = { version = "0.1.15",features = ["tokio-util"] }
-futures = { version = "0.3.30",features = ["default"] }
+hostname = "0.4.0"
+tokio-stream = { version = "0.1.15", features = ["tokio-util"] }
 
 
 [dev-dependencies]

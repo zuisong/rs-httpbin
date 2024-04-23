@@ -43,7 +43,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/headers](/headers) Returns request header dict.
 - [ ] /hidden-basic-auth/:user/:passwd 404'd BasicAuth.
 - [x] [/html](/html) Renders an HTML Page.
-- [ ] /hostname Returns the name of the host serving the request.
+- [x] [/hostname](/hostname) Returns the name of the host serving the request.
 - [x] [/image](/image) Returns page containing an image based on sent Accept header.
 - [x] [/image/jpeg](/image/jpeg) Returns a JPEG image.
 - [x] [/image/png](/image/png) Returns a PNG image.

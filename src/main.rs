@@ -61,6 +61,7 @@ fn app() -> Router<()> {
         .route("/headers", any(headers))
         .route("/json", get(json))
         .route("/xml", get(xml))
+        .route("/hostname", get(hostname))
         .route("/ip", get(ip))
         .route("/html", get(html))
         .route("/image", get(image))
@@ -209,6 +210,20 @@ async fn index() -> Html<String> {
 </style>
     "#),
     )
+}
+
+#[derive(Deserialize, Serialize, Default)]
+struct HostName {
+    hostname: String,
+}
+
+async fn hostname() -> impl IntoResponse {
+    let hostname = hostname::get()
+        .ok()
+        .and_then(|h| h.into_string().ok())
+        .unwrap_or("<< unknown hostname >>".to_string());
+
+    ErasedJson::pretty(HostName { hostname })
 }
 
 async fn json() -> impl IntoResponse {
