@@ -55,8 +55,8 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /range/1024?duration=s&chunk_size=code Streams n bytes, and allows specifying a Range header to select a subset of the data. Accepts a chunk_size and request duration parameter.
 - [ ] /redirect-to?url=foo&status_code=307 307 Redirects to the foo URL.
 - [ ] /redirect-to?url=foo 302 Redirects to the foo URL.
-- [ ] /redirect/:n 302 Redirects n times.
-- [ ] /relative-redirect/:n 302 Relative redirects n times.
+- [x] [/redirect/:n](/redirect/3) 302 Redirects n times.
+- [x] [/relative-redirect/:n](/relative-redirect/3) 302 Relative redirects n times.
 - [ ] /response-headers?key=val Returns given response headers.
 - [ ] /robots.txt Returns some robots.txt rules.
 - [x] [/sse](/sse?delay=1s&duration=3s&count=10) a stream of server-sent events.

@@ -6,7 +6,7 @@ use std::{
 
 use axum::{
     body::Bytes,
-    extract::Path,
+    extract::{Host, Path, Request},
     http::{
         header::{ACCEPT_ENCODING, CONTENT_TYPE, LOCATION},
         status, HeaderMap, HeaderValue, Method, StatusCode, Uri,
@@ -55,7 +55,9 @@ fn app() -> Router<()> {
         .route("/anything", any(anything))
         .route("/anything/*{id}", any(anything))
         //
-        .route("/absolute-redirect/:n", any(redirect))
+        .route("/absolute-redirect/:n", any(absolute_redirect))
+        .route("/redirect/:n", any(redirect))
+        .route("/relative-redirect/:n", any(relative_redirect))
         //
         .route("/user-agent", any(user_agent))
         .route("/headers", any(headers))
@@ -333,7 +335,58 @@ async fn redirect(Path(n): Path<i32>) -> Response {
         1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
         2.. => (
             StatusCode::FOUND,
-            [(LOCATION, format!("/absolute-redirect/{}", n - 1))],
+            [(LOCATION, format!("/redirect/{}", n - 1))],
+        )
+            .into_response(),
+    }
+}
+async fn relative_redirect(Path(n): Path<i32>) -> Response {
+    match n {
+        ..=0 => (
+            StatusCode::BAD_REQUEST,
+            ErasedJson::pretty(json!({
+                "status_code": 400,
+                "error": "Bad Request",
+                "detail": "redirect count must be > 0"
+            })),
+        )
+            .into_response(),
+        1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
+        2.. => (StatusCode::FOUND, [(LOCATION, format!("./{}", n - 1))]).into_response(),
+    }
+}
+async fn absolute_redirect(
+    Path(n): Path<i32>,
+
+    uri: Uri,
+    Host(host): Host,
+    _req: Request,
+) -> Response {
+    match n {
+        ..=0 => (
+            StatusCode::BAD_REQUEST,
+            ErasedJson::pretty(json!({
+                "status_code": 400,
+                "error": "Bad Request",
+                "detail": "redirect count must be > 0"
+            })),
+        )
+            .into_response(),
+        1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
+        2.. => (
+            StatusCode::FOUND,
+            [(
+                LOCATION,
+                Uri::builder()
+                    .path_and_query(format!(
+                        "{}/absolute-redirect/{}",
+                        format!("{}://{}", uri.scheme_str().unwrap_or("http"), host),
+                        n - 1
+                    ))
+                    .build()
+                    .unwrap()
+                    .to_string(),
+            )],
         )
             .into_response(),
     }
