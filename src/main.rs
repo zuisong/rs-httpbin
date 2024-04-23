@@ -4,12 +4,13 @@ use std::{
     time::{Duration, UNIX_EPOCH},
 };
 
+use ::base64::{engine::general_purpose::STANDARD, Engine};
 use axum::{
     body::Bytes,
     extract::{Host, Path, Request},
     http::{
-        header::{ACCEPT_ENCODING, CONTENT_TYPE, LOCATION},
-        status, HeaderMap, HeaderValue, Method, StatusCode, Uri,
+        header::{ACCEPT, ACCEPT_ENCODING, CONTENT_TYPE, LOCATION},
+        HeaderMap, HeaderValue, Method, StatusCode, Uri,
     },
     response::{sse::Event, Html, IntoResponse, Response, Sse},
     routing::{any, delete, get, head, options, patch, post, put, trace},
@@ -22,8 +23,7 @@ use axum_extra::{
     response::ErasedJson,
     TypedHeader,
 };
-use base64::{engine::general_purpose::STANDARD, Engine};
-use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML, TEXT_PLAIN, TEXT_XML};
+use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_XML};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio_stream::StreamExt;
@@ -55,26 +55,26 @@ fn app() -> Router<()> {
         .route("/anything", any(anything))
         .route("/anything/*{id}", any(anything))
         //
-        .route("/absolute-redirect/:n", any(absolute_redirect))
-        .route("/redirect/:n", any(redirect))
-        .route("/relative-redirect/:n", any(relative_redirect))
+        .route("/absolute-redirect/:n", any(redirect::absolute_redirect))
+        .route("/redirect/:n", any(redirect::redirect))
+        .route("/relative-redirect/:n", any(redirect::relative_redirect))
         //
         .route("/user-agent", any(user_agent))
         .route("/headers", any(headers))
-        .route("/json", get(json))
-        .route("/xml", get(xml))
+        .route("/json", get(resp_data::json))
+        .route("/xml", get(resp_data::xml))
+        .route("/html", get(resp_data::html))
         .route("/hostname", get(hostname))
         .route("/ip", get(ip))
-        .route("/html", get(html))
-        .route("/image", get(image))
-        .route("/image/jpeg", get(jpeg))
-        .route("/image/svg", get(svg))
-        .route("/image/png", get(png))
-        .route("/image/webp", get(webp))
-        .route("/base64/:value", any(base64_decode))
-        .route("/base64/encode/:value", any(base64_encode))
-        .route("/base64/decode/:value", any(base64_decode))
-        .route("/forms/post", any(forms_post))
+        .route("/image", get(image::image))
+        .route("/image/jpeg", get(image::jpeg))
+        .route("/image/svg", get(image::svg))
+        .route("/image/png", get(image::png))
+        .route("/image/webp", get(image::webp))
+        .route("/base64/:value", any(base64::base64_decode))
+        .route("/base64/encode/:value", any(base64::base64_encode))
+        .route("/base64/decode/:value", any(base64::base64_decode))
+        .route("/forms/post", any(resp_data::forms_post))
         .route("/sse", any(sse_handler))
         //keepme
         ;
@@ -98,7 +98,7 @@ fn app() -> Router<()> {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::INFO)
+        .with_max_level(Level::INFO)
         .try_init()
         .ok();
 
@@ -228,190 +228,171 @@ async fn hostname() -> impl IntoResponse {
     ErasedJson::pretty(HostName { hostname })
 }
 
-async fn json() -> impl IntoResponse {
-    (
-        [(
-            CONTENT_TYPE,
-            HeaderValue::from_static(APPLICATION_JSON.essence_str()),
-        )],
-        include_str!("../assets/sample.json"),
-    )
-}
+mod resp_data {
+    use super::*;
 
-async fn xml() -> impl IntoResponse {
-    (
-        [(
-            CONTENT_TYPE,
-            HeaderValue::from_static(TEXT_XML.essence_str()),
-        )],
-        include_str!("../assets/sample.xml"),
-    )
-}
-
-async fn html() -> impl IntoResponse {
-    (
-        [(
-            CONTENT_TYPE,
-            HeaderValue::from_static(TEXT_HTML.essence_str()),
-        )],
-        include_str!("../assets/sample.html"),
-    )
-}
-
-async fn image(headers: HeaderMap) -> impl IntoResponse {
-    let mime = headers
-        .get(axum::http::header::ACCEPT)
-        .and_then(|v| v.to_str().ok())
-        .map(mime::MimeIter::new);
-
-    let unsupported_media_type = status::StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response();
-
-    if mime.is_none() {
-        return unsupported_media_type;
+    pub(crate) async fn json() -> impl IntoResponse {
+        (
+            [(CONTENT_TYPE, (APPLICATION_JSON.essence_str()))],
+            include_str!("../assets/sample.json"),
+        )
     }
 
-    let mime = mime.unwrap();
+    pub(crate) async fn xml() -> impl IntoResponse {
+        (
+            [(CONTENT_TYPE, TEXT_XML.essence_str())],
+            include_str!("../assets/sample.xml"),
+        )
+    }
 
-    for m in mime.filter_map(|m| m.ok()).filter(|it| it.type_() == IMAGE) {
-        match m.subtype().as_str() {
-            "jpeg" => return jpeg().await,
-            "svg" => return svg().await,
-            "png" => return png().await,
-            "webp" => return webp().await,
-            _ => continue,
+    pub(crate) async fn html() -> impl IntoResponse {
+        (
+            [(CONTENT_TYPE, TEXT_HTML_UTF_8.essence_str())],
+            include_str!("../assets/sample.html"),
+        )
+    }
+
+    pub(crate) async fn forms_post() -> impl IntoResponse {
+        (
+            [(CONTENT_TYPE, TEXT_HTML_UTF_8.essence_str())],
+            include_str!("../assets/forms_post.html"),
+        )
+    }
+}
+
+mod image {
+    use super::*;
+
+    pub(crate) async fn image(headers: HeaderMap) -> impl IntoResponse {
+        let mime = headers
+            .get(ACCEPT)
+            .and_then(|v| v.to_str().ok())
+            .map(mime::MimeIter::new);
+
+        if let Some(mime) = mime {
+            for m in mime.filter_map(|m| m.ok()).filter(|it| it.type_() == IMAGE) {
+                match m.subtype().as_str() {
+                    "jpeg" => return jpeg().await,
+                    "svg" => return svg().await,
+                    "png" => return png().await,
+                    "webp" => return webp().await,
+                    _ => continue,
+                }
+            }
         }
+
+        StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response()
     }
 
-    unsupported_media_type
-}
+    pub(crate) async fn jpeg() -> Response {
+        (
+            [(CONTENT_TYPE, ("image/jpeg"))],
+            include_bytes!("../assets/jpeg.jpeg"),
+        )
+            .into_response()
+    }
 
-async fn jpeg() -> Response {
-    (
-        [(CONTENT_TYPE, HeaderValue::from_static("image/jpeg"))],
-        include_bytes!("../assets/jpeg.jpeg"),
-    )
-        .into_response()
-}
+    pub(crate) async fn svg() -> Response {
+        (
+            [(CONTENT_TYPE, ("image/svg"))],
+            include_bytes!("../assets/svg.svg"),
+        )
+            .into_response()
+    }
 
-async fn svg() -> Response {
-    (
-        [(CONTENT_TYPE, HeaderValue::from_static("image/svg"))],
-        include_bytes!("../assets/svg.svg"),
-    )
-        .into_response()
-}
+    pub(crate) async fn png() -> Response {
+        (
+            [(CONTENT_TYPE, ("image/png"))],
+            include_bytes!("../assets/png.png"),
+        )
+            .into_response()
+    }
 
-async fn png() -> Response {
-    (
-        [(CONTENT_TYPE, HeaderValue::from_static("image/png"))],
-        include_bytes!("../assets/png.png"),
-    )
-        .into_response()
+    pub(crate) async fn webp() -> Response {
+        (
+            [(CONTENT_TYPE, ("image/webp"))],
+            include_bytes!("../assets/webp.webp"),
+        )
+            .into_response()
+    }
 }
-
-async fn webp() -> Response {
-    (
-        [(CONTENT_TYPE, HeaderValue::from_static("image/webp"))],
-        include_bytes!("../assets/webp.webp"),
-    )
-        .into_response()
-}
-
 async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
     ErasedJson::pretty(data::Ip { origin }).into_response()
 }
+mod redirect {
+    use super::*;
 
-async fn redirect(Path(n): Path<i32>) -> Response {
-    match n {
-        ..=0 => (
-            StatusCode::BAD_REQUEST,
-            ErasedJson::pretty(json!({
-                "status_code": 400,
-                "error": "Bad Request",
-                "detail": "redirect count must be > 0"
-            })),
-        )
-            .into_response(),
-        1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
-        2.. => (
-            StatusCode::FOUND,
-            [(LOCATION, format!("/redirect/{}", n - 1))],
-        )
-            .into_response(),
+    pub(crate) async fn redirect(Path(n): Path<i32>) -> Response {
+        match n {
+            ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
+            1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
+            2.. => (
+                StatusCode::FOUND,
+                [(LOCATION, format!("/redirect/{}", n - 1))],
+            )
+                .into_response(),
+        }
     }
-}
-async fn relative_redirect(Path(n): Path<i32>) -> Response {
-    match n {
-        ..=0 => (
-            StatusCode::BAD_REQUEST,
-            ErasedJson::pretty(json!({
-                "status_code": 400,
-                "error": "Bad Request",
-                "detail": "redirect count must be > 0"
-            })),
-        )
-            .into_response(),
-        1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
-        2.. => (StatusCode::FOUND, [(LOCATION, format!("./{}", n - 1))]).into_response(),
-    }
-}
-async fn absolute_redirect(
-    Path(n): Path<i32>,
 
-    uri: Uri,
-    Host(host): Host,
-    _req: Request,
-) -> Response {
-    match n {
-        ..=0 => (
-            StatusCode::BAD_REQUEST,
-            ErasedJson::pretty(json!({
-                "status_code": 400,
-                "error": "Bad Request",
-                "detail": "redirect count must be > 0"
-            })),
-        )
-            .into_response(),
-        1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
-        2.. => (
-            StatusCode::FOUND,
-            [(
-                LOCATION,
-                Uri::builder()
-                    .path_and_query(format!(
-                        "{}/absolute-redirect/{}",
-                        format!("{}://{}", uri.scheme_str().unwrap_or("http"), host),
+    fn bad_redirect_request() -> ErasedJson {
+        ErasedJson::pretty(json!({
+            "status_code": 400,
+            "error": "Bad Request",
+            "detail": "redirect count must be > 0"
+        }))
+    }
+    pub(crate) async fn relative_redirect(Path(n): Path<i32>) -> Response {
+        match n {
+            ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
+            1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
+            2.. => (StatusCode::FOUND, [(LOCATION, format!("./{}", n - 1))]).into_response(),
+        }
+    }
+    pub(crate) async fn absolute_redirect(
+        Path(n): Path<i32>,
+        uri: Uri,
+        Host(host): Host,
+        _req: Request,
+    ) -> Response {
+        match n {
+            ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
+            1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
+            2.. => (
+                StatusCode::FOUND,
+                [(
+                    LOCATION,
+                    format!(
+                        "{}://{}/absolute-redirect/{}",
+                        uri.scheme_str().unwrap_or("http"),
+                        host,
                         n - 1
-                    ))
-                    .build()
-                    .unwrap()
-                    .to_string(),
-            )],
-        )
-            .into_response(),
+                    ),
+                )],
+            )
+                .into_response(),
+        }
     }
 }
 
-async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
-    (
-        [(CONTENT_TYPE, HeaderValue::from_static(TEXT_PLAIN.as_ref()))],
-        STANDARD
-            .decode(base64_data)
-            .unwrap_or_else(|e| e.to_string().into_bytes()),
-    )
-}
+mod base64 {
+    use super::*;
 
-async fn base64_encode(Path(data): Path<String>) -> impl IntoResponse {
-    (
-        [(CONTENT_TYPE, HeaderValue::from_static(TEXT_PLAIN.as_ref()))],
-        STANDARD.encode(data),
-    )
-}
+    pub(crate) async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
+        (
+            [(CONTENT_TYPE, (TEXT_PLAIN.as_ref()))],
+            STANDARD
+                .decode(base64_data)
+                .unwrap_or_else(|e| e.to_string().into_bytes()),
+        )
+    }
 
-async fn forms_post() -> impl IntoResponse {
-    Html(include_str!("../assets/forms_post.html"))
+    pub(crate) async fn base64_encode(Path(data): Path<String>) -> impl IntoResponse {
+        (
+            [(CONTENT_TYPE, (TEXT_PLAIN.as_ref()))],
+            STANDARD.encode(data),
+        )
+    }
 }
-
 #[derive(Deserialize, Serialize, Default)]
 struct SeeParam {
     pub count: Option<usize>,

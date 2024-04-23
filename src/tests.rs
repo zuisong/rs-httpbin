@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use axum::{
     body::Body,
-    http::{self, Request, StatusCode},
+    http::{Request, StatusCode},
 };
 use hyper_util::client::legacy::Client;
 use serde_json::{json, Value};
@@ -42,7 +42,7 @@ pub mod ext {
         }
 
         fn body_as_json(self) -> Pin<Box<dyn Future<Output = Value> + Send>> {
-            let fut = async { serde_json::from_slice(&*self.body().await).unwrap() };
+            let fut = async { serde_json::from_slice(&self.body().await).unwrap() };
             Box::pin(fut)
         }
     }
@@ -70,7 +70,7 @@ mod image_test {
     use tower::ServiceExt;
     use yare::parameterized;
 
-    use crate::*;
+    use super::*;
 
     #[parameterized(
         jpeg = { "jpeg" },
@@ -111,7 +111,7 @@ async fn json() {
             Request::builder()
                 .method(Method::GET)
                 .uri("/json")
-                .header(http::header::CONTENT_TYPE, mime::APPLICATION_JSON.as_ref())
+                .header(CONTENT_TYPE, APPLICATION_JSON.as_ref())
                 .body(Body::from(
                     serde_json::to_vec(&json!([1, 2, 3, 4])).unwrap(),
                 ))
