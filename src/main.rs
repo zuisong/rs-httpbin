@@ -319,9 +319,9 @@ async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
     ErasedJson::pretty(data::Ip { origin }).into_response()
 }
 
-async fn redirect(Path(n): Path<usize>) -> Response {
-    if n <= 0 {
-        return (
+async fn redirect(Path(n): Path<i32>) -> Response {
+    match n {
+        ..=0 => (
             StatusCode::BAD_REQUEST,
             ErasedJson::pretty(json!({
                 "status_code": 400,
@@ -329,16 +329,14 @@ async fn redirect(Path(n): Path<usize>) -> Response {
                 "detail": "redirect count must be > 0"
             })),
         )
-            .into_response();
+            .into_response(),
+        1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
+        2.. => (
+            StatusCode::FOUND,
+            [(LOCATION, format!("/absolute-redirect/{}", n - 1))],
+        )
+            .into_response(),
     }
-    if n == 1 {
-        return (StatusCode::FOUND, [(LOCATION, "/get")]).into_response();
-    }
-    return (
-        StatusCode::FOUND,
-        [(LOCATION, format!("/absolute-redirect/{}", n - 1))],
-    )
-        .into_response();
 }
 
 async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
@@ -383,6 +381,7 @@ async fn sse_handler(
         .take(count.unwrap_or(10_usize))
         .map(|id| {
             let timestamp = UNIX_EPOCH.elapsed().unwrap_or_default().as_millis();
+            #[allow(clippy::useless_conversion)]
             Event::default()
                 .data(serde_json::to_string(&data::SseData { id, timestamp }).unwrap_or_default())
                 .event("ping")
