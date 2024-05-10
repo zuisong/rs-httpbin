@@ -12,13 +12,13 @@ use axum::{
         header::{ACCEPT, ACCEPT_ENCODING, CONTENT_TYPE, LOCATION},
         HeaderMap, HeaderValue, Method, StatusCode, Uri,
     },
-    response::{sse::Event, Html, IntoResponse, Response, Sse},
+    response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
     routing::{any, delete, get, head, options, patch, post, put, trace},
     Router,
 };
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
-    extract::Query,
+    extract::{cookie, CookieJar, Query},
     headers::{ContentType, UserAgent},
     response::ErasedJson,
     TypedHeader,
@@ -76,6 +76,9 @@ fn app() -> Router<()> {
         .route("/base64/decode/:value", any(base64::base64_decode))
         .route("/forms/post", any(resp_data::forms_post))
         .route("/sse", any(sse_handler))
+        .route("/cookies", any(cookies::cookies))
+        .route("/cookies/set", any(cookies::cookies_set))
+        .route("/cookies/delete", any(cookies::cookies_del))
         //keepme
         ;
 
@@ -155,6 +158,36 @@ fn get_headers(header_map: &HeaderMap) -> BTreeMap<String, Vec<String>> {
         headers.insert(key.to_string(), header_values);
     }
     headers
+}
+mod cookies {
+    use super::*;
+
+    pub async fn cookies(jar: axum_extra::extract::cookie::CookieJar) -> impl IntoResponse {
+        let m: BTreeMap<_, _> = jar.iter().map(|k| k.name_value()).collect();
+        ErasedJson::pretty(m)
+    }
+
+    pub async fn cookies_set(Query(query): Query<BTreeMap<String, String>>) -> impl IntoResponse {
+        let mut jar = CookieJar::new();
+        for (k, v) in query.iter() {
+            jar = jar.add(cookie::Cookie::new(k.clone(), v.clone()));
+        }
+        (StatusCode::FOUND, (jar, Redirect::to("/cookies"))).into_response()
+    }
+
+    pub async fn cookies_del(Query(query): Query<BTreeMap<String, String>>) -> impl IntoResponse {
+        let mut jar = CookieJar::new();
+        for (k, v) in query.iter() {
+            jar = jar.add(
+                cookie::Cookie::build((k.clone(), v.clone()))
+                    .max_age(time::Duration::ZERO)
+                    .expires(time::OffsetDateTime::now_utc())
+                    .http_only(true)
+                    .build(),
+            );
+        }
+        (StatusCode::FOUND, (jar, Redirect::to("/cookies"))).into_response()
+    }
 }
 
 async fn anything(

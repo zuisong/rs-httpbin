@@ -26,9 +26,9 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /bytes/:n Generates n random bytes of binary data, accepts optional seed integer parameter.
 - [ ] /cache Returns 200 unless an If-Modified-Since or If-None-Match header is provided, when it returns a 304.
 - [ ] /cache/:n Sets a Cache-Control header for n seconds.
-- [ ] /cookies Returns cookie data.
-- [ ] /cookies/delete?name Deletes one or more simple cookies.
-- [ ] /cookies/set?name=value Sets one or more simple cookies.
+- [x] [/cookies](/cookies) Returns cookie data.
+- [x] [/cookies/delete?name](/cookies/delete?k1=&k2=) Deletes one or more simple cookies.
+- [x] [/cookies/set?name=value](/cookies/set?k1=v1&k2=v2) Sets one or more simple cookies.
 - [x] [/deflate](/deflate) Returns deflate-encoded data.
 - [ ] /delay/:n Delays responding for min(n, 10) seconds.
 - [ ] /deny Denied by robots.txt file.
