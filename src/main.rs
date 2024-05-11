@@ -81,6 +81,8 @@ fn app() -> Router<()> {
         .route("/cookies/delete", any(cookies::cookies_del))
         .route("/encoding/utf8", any(utf8))
         .route("/robots.txt", any(robots_txt))
+        .route("/links/:total", any(links))
+        .route("/links/:total/:page", any(links_n))
         //keepme
         ;
 
@@ -98,6 +100,40 @@ fn app() -> Router<()> {
     }
 
     router
+}
+
+async fn links(Path((total,)): Path<(u32,)>) -> Response {
+    return Redirect::to(format!("/links/{}/0", total).as_str()).into_response();
+}
+async fn links_n(Path((total, cur)): Path<(u32, u32)>) -> Response {
+    let total = std::cmp::min(total, 256);
+
+    let mut env = minijinja::Environment::new();
+    env.set_trim_blocks(true);
+    env.set_lstrip_blocks(true);
+
+    let html = env
+        .render_str(
+            r#"
+    <html>
+        <head>
+            <title>Links</title>
+        </head>
+        <body>
+        {% for idx in range(total) %}
+            {% if idx == cur %}
+                {{idx}}
+            {% else %}
+                <a href="/links/{{total}}/{{idx}}">{{idx}}</a>
+            {% endif %}
+        {% endfor %}
+        </body>
+    </html>
+    "#,
+            minijinja::context! {total, cur},
+        )
+        .unwrap();
+    Html(html).into_response()
 }
 
 #[tokio::main]

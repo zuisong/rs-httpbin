@@ -39,6 +39,7 @@ humantime-serde = "1.1.1"
 hostname = "0.4.0"
 tokio-stream = { version = "0.1.15", features = ["tokio-util"] }
 time = "0.3.36"
+minijinja = "2.0.1"
 
 
 [dev-dependencies]
