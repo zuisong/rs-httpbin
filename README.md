@@ -51,10 +51,10 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/image/webp](/image/webp) Returns a WEBP image.
 - [x] [/ip](/ip) Returns Origin IP.
 - [x] [/json](/json) Returns JSON.
-- [ ] [/links/:n](/links/10) Returns page containing n HTML links.
+- [x] [/links/:n](/links/10) Returns page containing n HTML links.
 - [ ] /range/1024?duration=s&chunk_size=code Streams n bytes, and allows specifying a Range header to select a subset of the data. Accepts a chunk_size and request duration parameter.
-- [ ] /redirect-to?url=foo&status_code=307 307 Redirects to the foo URL.
-- [ ] /redirect-to?url=foo 302 Redirects to the foo URL.
+- [x] [/redirect-to?url=foo&status_code=307](/redirect-to?url=/&status_code=307) 307 Redirects to the foo URL.
+- [x] [/redirect-to?url=foo](/redirect-to?url=/) 302 Redirects to the foo URL.
 - [x] [/redirect/:n](/redirect/3) 302 Redirects n times.
 - [x] [/relative-redirect/:n](/relative-redirect/3) 302 Relative redirects n times.
 - [ ] /response-headers?key=val Returns given response headers.

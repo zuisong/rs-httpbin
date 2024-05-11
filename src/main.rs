@@ -81,8 +81,9 @@ fn app() -> Router<()> {
         .route("/cookies/delete", any(cookies::cookies_del))
         .route("/encoding/utf8", any(utf8))
         .route("/robots.txt", any(robots_txt))
-        .route("/links/:total", any(links))
-        .route("/links/:total/:page", any(links_n))
+        .route("/links/:total", any(links::links))
+        .route("/links/:total/:page", any(links::links))
+        .route("/redirect-to", any(redirect::redirect_to))
         //keepme
         ;
 
@@ -102,19 +103,29 @@ fn app() -> Router<()> {
     router
 }
 
-async fn links(Path((total,)): Path<(u32,)>) -> Response {
-    return Redirect::to(format!("/links/{}/0", total).as_str()).into_response();
-}
-async fn links_n(Path((total, cur)): Path<(u32, u32)>) -> Response {
-    let total = std::cmp::min(total, 256);
+mod links {
+    use super::*;
+    #[derive(Debug, Deserialize)]
+    pub struct LinksParam {
+        pub total: u32,
+        pub page: Option<u32>,
+    }
 
-    let mut env = minijinja::Environment::new();
-    env.set_trim_blocks(true);
-    env.set_lstrip_blocks(true);
+    pub async fn links(Path(LinksParam { total, page }): Path<LinksParam>) -> Response {
+        if page.is_none() {
+            return Redirect::to(format!("/links/{}/0", total).as_str()).into_response();
+        }
+        let cur = page.unwrap();
 
-    let html = env
-        .render_str(
-            r#"
+        let total = std::cmp::min(total, 256);
+
+        let mut env = minijinja::Environment::new();
+        env.set_trim_blocks(true);
+        env.set_lstrip_blocks(true);
+
+        let html = env
+            .render_str(
+                r#"
     <html>
         <head>
             <title>Links</title>
@@ -130,12 +141,12 @@ async fn links_n(Path((total, cur)): Path<(u32, u32)>) -> Response {
         </body>
     </html>
     "#,
-            minijinja::context! {total, cur},
-        )
-        .unwrap();
-    Html(html).into_response()
+                minijinja::context! {total, cur},
+            )
+            .unwrap();
+        Html(html).into_response()
+    }
 }
-
 #[tokio::main]
 async fn main() {
     tracing_subscriber::fmt()
@@ -456,6 +467,24 @@ mod redirect {
             )
                 .into_response(),
         }
+    }
+
+    #[derive(Debug, Deserialize)]
+    pub struct Params {
+        url: String,
+        status_code: Option<u16>,
+    }
+
+    pub async fn redirect_to(Query(Params { url, status_code }): Query<Params>) -> Response {
+        let status_code = status_code.unwrap_or(302);
+        (
+            StatusCode::from_u16(status_code)
+                .ok()
+                .filter(StatusCode::is_redirection)
+                .unwrap_or(StatusCode::FOUND),
+            [(LOCATION, url)],
+        )
+            .into_response()
     }
 }
 
