@@ -91,7 +91,7 @@ fn app() -> Router<()> {
         router = router.route(
             format!("/{format}").as_str(),
             get(anything).layer((
-                SetRequestHeaderLayer::if_not_present(
+                SetRequestHeaderLayer::overriding(
                     ACCEPT_ENCODING,
                     HeaderValue::from_static(format),
                 ),
