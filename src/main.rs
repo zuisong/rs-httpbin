@@ -12,9 +12,10 @@ use axum::{
         header::{ACCEPT, ACCEPT_ENCODING, CONTENT_TYPE, LOCATION},
         HeaderMap, HeaderValue, Method, StatusCode, Uri,
     },
+    middleware,
     response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
     routing::{any, delete, get, head, options, patch, post, put, trace},
-    Router,
+    RequestExt, Router,
 };
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
@@ -84,7 +85,14 @@ fn app() -> Router<()> {
         .route("/links/:total", any(links::links))
         .route("/links/:total/:page", any(links::links))
         .route("/redirect-to", any(redirect::redirect_to))
-        //keepme
+        .route("/delay/:n", any(anything).layer({
+            async fn delay(Path(delays): Path<u16>, request: Request, next: middleware::Next) -> impl IntoResponse {
+                tokio::time::sleep(Duration::from_secs(delays.min(10).into())).await;
+                return next.run(request).await;
+            }
+            middleware:: from_fn(delay)
+        }))
+        //keep me
         ;
 
     for format in ["gzip", "zstd", "br", "deflate"] {
@@ -105,6 +113,7 @@ fn app() -> Router<()> {
 
 mod links {
     use super::*;
+
     #[derive(Debug, Deserialize)]
     pub struct LinksParam {
         pub total: u32,
