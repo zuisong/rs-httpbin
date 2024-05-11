@@ -36,7 +36,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /digest-auth/:qop/:user/:passwd Challenges HTTP Digest Auth.
 - [ ] /drip?numbytes=n&duration=s&delay=s&code=code Drips data over a duration after an optional initial delay, then (optionally) returns with the given status code.
 - [ ] /dump/request Returns the given request in its HTTP/1.x wire approximate representation.
-- [ ] /encoding/utf8 Returns page containing UTF-8 data.
+- [ ] [/encoding/utf8](/encoding/utf8) Returns page containing UTF-8 data.
 - [ ] /etag/:etag Assumes the resource has the given etag and responds to If-None-Match header with a 200 or 304 and If-Match with a 200 or 412 as appropriate.
 - [x] [/forms/post](/forms/post) HTML form that submits to /post
 - [x] [/gzip](/gzip) Returns gzip-encoded data.
@@ -58,7 +58,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/redirect/:n](/redirect/3) 302 Redirects n times.
 - [x] [/relative-redirect/:n](/relative-redirect/3) 302 Relative redirects n times.
 - [ ] /response-headers?key=val Returns given response headers.
-- [ ] /robots.txt Returns some robots.txt rules.
+- [x] [/robots.txt](/robots.txt) Returns some robots.txt rules.
 - [x] [/sse](/sse?delay=1s&duration=3s&count=10) a stream of server-sent events.
 - [ ] /status/:code Returns given HTTP Status code.
 - [ ] /stream-bytes/:n Streams n random bytes of binary data, accepts optional seed and chunk_size integer parameters.

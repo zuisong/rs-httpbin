@@ -79,6 +79,8 @@ fn app() -> Router<()> {
         .route("/cookies", any(cookies::cookies))
         .route("/cookies/set", any(cookies::cookies_set))
         .route("/cookies/delete", any(cookies::cookies_del))
+        .route("/encoding/utf8", any(utf8))
+        .route("/robots.txt", any(robots_txt))
         //keepme
         ;
 
@@ -259,6 +261,20 @@ async fn hostname() -> impl IntoResponse {
         .unwrap_or("<< unknown hostname >>".to_string());
 
     ErasedJson::pretty(HostName { hostname })
+}
+
+async fn utf8() -> impl IntoResponse {
+    Html(include_str!("../assets/utf8.html"))
+}
+
+async fn robots_txt() -> impl IntoResponse {
+    (
+        [(
+            CONTENT_TYPE,
+            HeaderValue::from_static(mime::TEXT_PLAIN_UTF_8.as_ref()),
+        )],
+        include_str!("../assets/robots.txt"),
+    )
 }
 
 mod resp_data {
