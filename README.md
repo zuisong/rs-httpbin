@@ -20,7 +20,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/base64/:value](/base64/aGVsbG8K) Decodes a Base64-encoded string.
 - [x] [/base64/decode/:value](/base64/decode/aGVsbG8K) Explicit URL for decoding a Base64 encoded string.
 - [x] [/base64/encode/:value](/base64/encode/hello) Encodes a string into URL-safe Base64.
-- [ ] /basic-auth/:user/:passwd Challenges HTTPBasic Auth.
+- [x] [/basic-auth/:user/:passwd](/basic-auth/user/passwd) Challenges HTTPBasic Auth.
 - [ ] /bearer Checks Bearer token header - returns 401 if not set.
 - [x] [/br](/br) Returns brotli-encoded data.
 - [ ] /bytes/:n Generates n random bytes of binary data, accepts optional seed integer parameter.
@@ -36,12 +36,12 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /digest-auth/:qop/:user/:passwd Challenges HTTP Digest Auth.
 - [ ] /drip?numbytes=n&duration=s&delay=s&code=code Drips data over a duration after an optional initial delay, then (optionally) returns with the given status code.
 - [ ] /dump/request Returns the given request in its HTTP/1.x wire approximate representation.
-- [ ] [/encoding/utf8](/encoding/utf8) Returns page containing UTF-8 data.
+- [x] [/encoding/utf8](/encoding/utf8) Returns page containing UTF-8 data.
 - [ ] /etag/:etag Assumes the resource has the given etag and responds to If-None-Match header with a 200 or 304 and If-Match with a 200 or 412 as appropriate.
 - [x] [/forms/post](/forms/post) HTML form that submits to /post
 - [x] [/gzip](/gzip) Returns gzip-encoded data.
 - [x] [/headers](/headers) Returns request header dict.
-- [ ] /hidden-basic-auth/:user/:passwd 404'd BasicAuth.
+- [x] [/hidden-basic-auth/:user/:passwd](/hidden-basic-auth/user/passwd) 404'd BasicAuth.
 - [x] [/html](/html) Renders an HTML Page.
 - [x] [/hostname](/hostname) Returns the name of the host serving the request.
 - [x] [/image](/image) Returns page containing an image based on sent Accept header.
@@ -57,7 +57,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/redirect-to?url=foo](/redirect-to?url=/) 302 Redirects to the foo URL.
 - [x] [/redirect/:n](/redirect/3) 302 Redirects n times.
 - [x] [/relative-redirect/:n](/relative-redirect/3) 302 Relative redirects n times.
-- [ ] /response-headers?key=val Returns given response headers.
+- [x] [/response-headers?key=val](/response-headers?key=val) Returns given response headers.
 - [x] [/robots.txt](/robots.txt) Returns some robots.txt rules.
 - [x] [/sse](/sse?delay=1s&duration=3s&count=10) a stream of server-sent events.
 - [ ] /status/:code Returns given HTTP Status code.
@@ -65,7 +65,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /stream/:n Streams min(n, 100) lines.
 - [ ] /unstable Fails half the time, accepts optional failure_rate float and seed integer parameters.
 - [x] [/user-agent](/user-agent) Returns user-agent.
-- [ ] /uuid Generates a UUIDv4 value.
+- [x] [/uuid](/uuid) Generates a UUIDv4 value.
 - [ ] /websocket/echo?max_fragment_size=2048&max_message_size=10240 A WebSocket echo service.
 - [x] [/xml](/xml) Returns some XML
 - [x] [/zstd](/zstd) Returns zstd-encoded data.

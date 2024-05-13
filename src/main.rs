@@ -1,6 +1,7 @@
 use std::{
     collections::BTreeMap,
     net::SocketAddr,
+    str::FromStr,
     time::{Duration, UNIX_EPOCH},
 };
 
@@ -9,18 +10,18 @@ use axum::{
     body::Bytes,
     extract::{Host, Path, Request},
     http::{
-        header::{ACCEPT, ACCEPT_ENCODING, CONTENT_TYPE, LOCATION},
-        HeaderMap, HeaderValue, Method, StatusCode, Uri,
+        header::{ACCEPT, ACCEPT_ENCODING, CONTENT_TYPE, LOCATION, WWW_AUTHENTICATE},
+        HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri,
     },
     middleware,
     response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
     routing::{any, delete, get, head, options, patch, post, put, trace},
-    RequestExt, Router,
+    Router,
 };
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
     extract::{cookie, CookieJar, Query},
-    headers::{ContentType, UserAgent},
+    headers::{authorization::Basic, Authorization, ContentType, UserAgent},
     response::ErasedJson,
     TypedHeader,
 };
@@ -35,6 +36,7 @@ use tower_http::{
     trace::TraceLayer,
 };
 use tracing::Level;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod data;
 #[cfg(test)]
@@ -60,18 +62,23 @@ fn app() -> Router<()> {
         .route("/redirect/:n", any(redirect::redirect))
         .route("/relative-redirect/:n", any(redirect::relative_redirect))
         //
+        .route("/basic-auth/:user/:passwd", any(basic_auth::basic_auth))
+        .route("/hidden-basic-auth/:user/:passwd", any(basic_auth::hidden_basic_auth))
+        //
         .route("/user-agent", any(user_agent))
         .route("/headers", any(headers))
         .route("/json", get(resp_data::json))
         .route("/xml", get(resp_data::xml))
         .route("/html", get(resp_data::html))
         .route("/hostname", get(hostname))
-        .route("/ip", get(ip))
-        .route("/image", get(image::image))
-        .route("/image/jpeg", get(image::jpeg))
-        .route("/image/svg", get(image::svg))
-        .route("/image/png", get(image::png))
-        .route("/image/webp", get(image::webp))
+        .route("/uuid", any(uuid))
+        .route("/response-headers", any(response_headers))
+        .route("/ip", any(ip))
+        .route("/image", any(image::image))
+        .route("/image/jpeg", any(image::jpeg))
+        .route("/image/svg", any(image::svg))
+        .route("/image/png", any(image::png))
+        .route("/image/webp", any(image::webp))
         .route("/base64/:value", any(base64::base64_decode))
         .route("/base64/encode/:value", any(base64::base64_encode))
         .route("/base64/decode/:value", any(base64::base64_decode))
@@ -88,83 +95,40 @@ fn app() -> Router<()> {
         .route("/delay/:n", any(anything).layer({
             async fn delay(Path(delays): Path<u16>, request: Request, next: middleware::Next) -> impl IntoResponse {
                 tokio::time::sleep(Duration::from_secs(delays.min(10).into())).await;
-                return next.run(request).await;
+                next.run(request).await
             }
-            middleware:: from_fn(delay)
+            middleware::from_fn(delay)
         }))
+
         //keep me
         ;
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
             format!("/{format}").as_str(),
-            get(anything).layer((
-                SetRequestHeaderLayer::overriding(
-                    ACCEPT_ENCODING,
-                    HeaderValue::from_static(format),
-                ),
-                CompressionLayer::new(),
-            )),
+            get(anything).layer((SetRequestHeaderLayer::overriding(
+                ACCEPT_ENCODING,
+                HeaderValue::from_static(format),
+            ),)),
         );
     }
 
     router
 }
 
-mod links {
-    use super::*;
-
-    #[derive(Debug, Deserialize)]
-    pub struct LinksParam {
-        pub total: u32,
-        pub page: Option<u32>,
-    }
-
-    pub async fn links(Path(LinksParam { total, page }): Path<LinksParam>) -> Response {
-        if page.is_none() {
-            return Redirect::to(format!("/links/{}/0", total).as_str()).into_response();
-        }
-        let cur = page.unwrap();
-
-        let total = std::cmp::min(total, 256);
-
-        let mut env = minijinja::Environment::new();
-        env.set_trim_blocks(true);
-        env.set_lstrip_blocks(true);
-
-        let html = env
-            .render_str(
-                r#"
-    <html>
-        <head>
-            <title>Links</title>
-        </head>
-        <body>
-        {% for idx in range(total) %}
-            {% if idx == cur %}
-                {{idx}}
-            {% else %}
-                <a href="/links/{{total}}/{{idx}}">{{idx}}</a>
-            {% endif %}
-        {% endfor %}
-        </body>
-    </html>
-    "#,
-                minijinja::context! {total, cur},
-            )
-            .unwrap();
-        Html(html).into_response()
-    }
-}
 #[tokio::main]
 async fn main() {
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .try_init()
-        .ok();
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| "example_websockets=debug,tower_http=debug".into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
 
     let router: Router = app();
     let app = router.layer((
+        CompressionLayer::new(),
         TraceLayer::new_for_http()
             .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(Level::INFO))
             .on_request(tower_http::trace::DefaultOnRequest::new().level(Level::INFO))
@@ -200,6 +164,77 @@ async fn headers(header_map: HeaderMap) -> impl IntoResponse {
     })
 }
 
+mod basic_auth {
+    use super::*;
+    #[derive(Serialize, Deserialize)]
+    struct BasicAuth {
+        pub authorized: bool,
+        pub user: String,
+    }
+
+    pub async fn basic_auth(
+        Path((user, passwd)): Path<(String, String)>,
+        basic_auth: Option<TypedHeader<Authorization<Basic>>>,
+    ) -> impl IntoResponse {
+        let (basic_auth_username, basic_auth_password) = match &basic_auth {
+            None => (None, None),
+            Some(auth) => (auth.username().into(), auth.password().into()),
+        };
+        let authorized = Some(passwd.as_str()) == basic_auth_password
+            && Some(user.as_str()) == basic_auth_username;
+        let body = ErasedJson::pretty(BasicAuth {
+            authorized,
+            user: basic_auth_username.unwrap_or("").to_string(),
+        });
+        if authorized {
+            (StatusCode::OK, body).into_response()
+        } else {
+            (
+                StatusCode::UNAUTHORIZED,
+                [(
+                    WWW_AUTHENTICATE,
+                    HeaderValue::from_static(r#"Basic realm="Fake Realm""#),
+                )],
+                body,
+            )
+                .into_response()
+        }
+    }
+
+    pub async fn hidden_basic_auth(
+        Path((user, passwd)): Path<(String, String)>,
+        basic_auth: Option<TypedHeader<Authorization<Basic>>>,
+    ) -> impl IntoResponse {
+        let (basic_auth_username, basic_auth_password) = match &basic_auth {
+            None => (None, None),
+            Some(auth) => (auth.username().into(), auth.password().into()),
+        };
+        let authorized = Some(passwd.as_str()) == basic_auth_password
+            && Some(user.as_str()) == basic_auth_username;
+        if authorized {
+            (
+                StatusCode::OK,
+                ErasedJson::pretty(BasicAuth {
+                    authorized,
+                    user: basic_auth_username.unwrap_or("").to_string(),
+                }),
+            )
+                .into_response()
+        } else {
+            (
+                StatusCode::NOT_FOUND,
+                ErasedJson::pretty(json!(
+                    {
+                        "status_code": 404,
+                        "error": "Not Found"
+                    }
+                )),
+            )
+                .into_response()
+        }
+    }
+}
+
 fn get_headers(header_map: &HeaderMap) -> BTreeMap<String, Vec<String>> {
     let mut headers = BTreeMap::new();
     for key in header_map.keys() {
@@ -220,7 +255,7 @@ fn get_headers(header_map: &HeaderMap) -> BTreeMap<String, Vec<String>> {
 mod cookies {
     use super::*;
 
-    pub async fn cookies(jar: axum_extra::extract::cookie::CookieJar) -> impl IntoResponse {
+    pub async fn cookies(jar: CookieJar) -> impl IntoResponse {
         let m: BTreeMap<_, _> = jar.iter().map(|k| k.name_value()).collect();
         ErasedJson::pretty(m)
     }
@@ -323,6 +358,24 @@ async fn utf8() -> impl IntoResponse {
     Html(include_str!("../assets/utf8.html"))
 }
 
+async fn uuid() -> impl IntoResponse {
+    ErasedJson::pretty(json!( { "uuid" : uuid::Uuid::new_v4().to_string(), }))
+}
+
+async fn response_headers(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
+    let mut headers = HeaderMap::new();
+
+    for (k, vals) in query.iter() {
+        for v in vals {
+            if let (Ok(k), Ok(v)) = (HeaderName::from_str(k), HeaderValue::from_str(v)) {
+                headers.append(k, v);
+            };
+        }
+    }
+
+    (headers, ErasedJson::pretty(query))
+}
+
 async fn robots_txt() -> impl IntoResponse {
     (
         [(
@@ -338,7 +391,7 @@ mod resp_data {
 
     pub(crate) async fn json() -> impl IntoResponse {
         (
-            [(CONTENT_TYPE, (APPLICATION_JSON.essence_str()))],
+            [(CONTENT_TYPE, APPLICATION_JSON.essence_str())],
             include_str!("../assets/sample.json"),
         )
     }
@@ -391,7 +444,7 @@ mod image {
 
     pub(crate) async fn jpeg() -> Response {
         (
-            [(CONTENT_TYPE, ("image/jpeg"))],
+            [(CONTENT_TYPE, "image/jpeg")],
             include_bytes!("../assets/jpeg.jpeg"),
         )
             .into_response()
@@ -399,7 +452,7 @@ mod image {
 
     pub(crate) async fn svg() -> Response {
         (
-            [(CONTENT_TYPE, ("image/svg"))],
+            [(CONTENT_TYPE, "image/svg")],
             include_bytes!("../assets/svg.svg"),
         )
             .into_response()
@@ -407,7 +460,7 @@ mod image {
 
     pub(crate) async fn png() -> Response {
         (
-            [(CONTENT_TYPE, ("image/png"))],
+            [(CONTENT_TYPE, "image/png")],
             include_bytes!("../assets/png.png"),
         )
             .into_response()
@@ -415,7 +468,7 @@ mod image {
 
     pub(crate) async fn webp() -> Response {
         (
-            [(CONTENT_TYPE, ("image/webp"))],
+            [(CONTENT_TYPE, "image/webp")],
             include_bytes!("../assets/webp.webp"),
         )
             .into_response()
@@ -502,7 +555,7 @@ mod base64 {
 
     pub(crate) async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
         (
-            [(CONTENT_TYPE, (TEXT_PLAIN.as_ref()))],
+            [(CONTENT_TYPE, TEXT_PLAIN.as_ref())],
             STANDARD
                 .decode(base64_data)
                 .unwrap_or_else(|e| e.to_string().into_bytes()),
@@ -510,10 +563,7 @@ mod base64 {
     }
 
     pub(crate) async fn base64_encode(Path(data): Path<String>) -> impl IntoResponse {
-        (
-            [(CONTENT_TYPE, (TEXT_PLAIN.as_ref()))],
-            STANDARD.encode(data),
-        )
+        ([(CONTENT_TYPE, TEXT_PLAIN.as_ref())], STANDARD.encode(data))
     }
 }
 #[derive(Deserialize, Serialize, Default)]
@@ -547,4 +597,49 @@ async fn sse_handler(
         .throttle(duration.unwrap_or(Duration::from_secs(1)));
 
     Sse::new(stream).into_response()
+}
+mod links {
+    use super::*;
+
+    #[derive(Debug, Deserialize)]
+    pub struct LinksParam {
+        pub total: u32,
+        pub page: Option<u32>,
+    }
+
+    pub async fn links(Path(LinksParam { total, page }): Path<LinksParam>) -> Response {
+        if page.is_none() {
+            return Redirect::to(format!("/links/{}/0", total).as_str()).into_response();
+        }
+        let cur = page.unwrap();
+
+        let total = std::cmp::min(total, 256);
+
+        let mut env = minijinja::Environment::new();
+        env.set_trim_blocks(true);
+        env.set_lstrip_blocks(true);
+
+        let html = env
+            .render_str(
+                r#"
+    <html>
+        <head>
+            <title>Links</title>
+        </head>
+        <body>
+        {% for idx in range(total) %}
+            {% if idx == cur %}
+                {{idx}}
+            {% else %}
+                <a href="/links/{{total}}/{{idx}}">{{idx}}</a>
+            {% endif %}
+        {% endfor %}
+        </body>
+    </html>
+    "#,
+                minijinja::context! {total, cur},
+            )
+            .unwrap();
+        Html(html).into_response()
+    }
 }
