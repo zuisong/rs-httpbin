@@ -5,17 +5,14 @@ use std::{
     time::{Duration, UNIX_EPOCH},
 };
 
-use ::base64::{engine::general_purpose::STANDARD, Engine};
+use ::base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use axum::{
-    body::Bytes,
+    body::{Body, Bytes},
     extract::{Host, Path, Request},
-    http::{
-        header::{ACCEPT, ACCEPT_ENCODING, CONTENT_TYPE, LOCATION, WWW_AUTHENTICATE},
-        HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri,
-    },
+    http::{header::*, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
     middleware,
     response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
-    routing::{any, delete, get, head, options, patch, post, put, trace},
+    routing::*,
     Router,
 };
 use axum_client_ip::InsecureClientIp;
@@ -31,11 +28,10 @@ use serde_json::json;
 use tokio_stream::StreamExt;
 use tower_http::{
     compression::CompressionLayer,
-    cors::{Any, CorsLayer},
+    cors::CorsLayer,
     set_header::SetRequestHeaderLayer,
-    trace::TraceLayer,
+    trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
-use tracing::Level;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 mod data;
@@ -83,7 +79,7 @@ fn app() -> Router<()> {
         .route("/base64/encode/:value", any(base64::base64_encode))
         .route("/base64/decode/:value", any(base64::base64_decode))
         .route("/forms/post", any(resp_data::forms_post))
-        .route("/sse", any(sse_handler))
+        .route("/sse", any(sse::sse_handler))
         .route("/cookies", any(cookies::cookies))
         .route("/cookies/set", any(cookies::cookies_set))
         .route("/cookies/delete", any(cookies::cookies_del))
@@ -106,10 +102,10 @@ fn app() -> Router<()> {
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
             format!("/{format}").as_str(),
-            get(anything).layer((SetRequestHeaderLayer::overriding(
+            get(anything).layer(SetRequestHeaderLayer::overriding(
                 ACCEPT_ENCODING,
                 HeaderValue::from_static(format),
-            ),)),
+            )),
         );
     }
 
@@ -121,7 +117,7 @@ async fn main() {
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "example_websockets=debug,tower_http=debug".into()),
+                .unwrap_or_else(|_| "DEBUG".into()),
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
@@ -130,15 +126,24 @@ async fn main() {
     let app = router.layer((
         CompressionLayer::new(),
         TraceLayer::new_for_http()
-            .make_span_with(tower_http::trace::DefaultMakeSpan::new().level(Level::INFO))
-            .on_request(tower_http::trace::DefaultOnRequest::new().level(Level::INFO))
+            .make_span_with(|request: &Request<Body>| {
+                let request_id = uuid::Uuid::new_v4();
+                tracing::span!(
+                    tracing::Level::DEBUG,
+                    "request",
+                    method = display(request.method()),
+                    uri = display(request.uri()),
+                    version = debug(request.version()),
+                    request_id = display(request_id)
+                )
+            })
+            .on_request(DefaultOnRequest::new().level(tracing::Level::INFO))
             .on_response(
-                tower_http::trace::DefaultOnResponse::new()
-                    .level(Level::INFO)
+                DefaultOnResponse::new()
+                    .level(tracing::Level::INFO)
                     .include_headers(true),
             ),
-        CorsLayer::new().allow_origin(Any).allow_methods(Any),
-        // CompressionLayer::default(),
+        CorsLayer::permissive(),
     ));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Listening on http://{}", listener.local_addr().unwrap());
@@ -166,6 +171,7 @@ async fn headers(header_map: HeaderMap) -> impl IntoResponse {
 
 mod basic_auth {
     use super::*;
+
     #[derive(Serialize, Deserialize)]
     struct BasicAuth {
         pub authorized: bool,
@@ -296,7 +302,7 @@ async fn anything(
 
     let body_string = match String::from_utf8(body.to_vec()) {
         Ok(body) => body,
-        Err(_) => STANDARD.encode(&body),
+        Err(_) => BASE64.encode(&body),
     };
 
     let json = content_type.and_then(|TypedHeader(content_type)| {
@@ -556,49 +562,57 @@ mod base64 {
     pub(crate) async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
         (
             [(CONTENT_TYPE, TEXT_PLAIN.as_ref())],
-            STANDARD
+            BASE64
                 .decode(base64_data)
                 .unwrap_or_else(|e| e.to_string().into_bytes()),
         )
     }
 
     pub(crate) async fn base64_encode(Path(data): Path<String>) -> impl IntoResponse {
-        ([(CONTENT_TYPE, TEXT_PLAIN.as_ref())], STANDARD.encode(data))
+        ([(CONTENT_TYPE, TEXT_PLAIN.as_ref())], BASE64.encode(data))
     }
 }
-#[derive(Deserialize, Serialize, Default)]
-struct SeeParam {
-    pub count: Option<usize>,
-    #[serde(with = "humantime_serde")]
-    pub duration: Option<Duration>,
-    #[serde(with = "humantime_serde")]
-    pub delay: Option<Duration>,
-}
 
-async fn sse_handler(
-    Query(SeeParam {
-        delay,
-        duration,
-        count,
-    }): Query<SeeParam>,
-) -> Response {
-    tokio::time::sleep(delay.unwrap_or(Duration::ZERO)).await;
+mod sse {
+    use super::*;
 
-    let stream = tokio_stream::iter(1..)
-        .take(count.unwrap_or(10_usize))
-        .map(|id| {
-            let timestamp = UNIX_EPOCH.elapsed().unwrap_or_default().as_millis();
-            #[allow(clippy::useless_conversion)]
-            Event::default()
-                .data(serde_json::to_string(&data::SseData { id, timestamp }).unwrap_or_default())
-                .event("ping")
-                .try_into()
-        })
-        .throttle(duration.unwrap_or(Duration::from_secs(1)));
+    #[derive(Deserialize, Serialize, Default)]
+    pub struct SeeParam {
+        pub count: Option<usize>,
+        #[serde(with = "humantime_serde")]
+        pub duration: Option<Duration>,
+        #[serde(with = "humantime_serde")]
+        pub delay: Option<Duration>,
+    }
 
-    Sse::new(stream).into_response()
+    pub async fn sse_handler(
+        Query(SeeParam {
+            delay,
+            duration,
+            count,
+        }): Query<SeeParam>,
+    ) -> Response {
+        tokio::time::sleep(delay.unwrap_or(Duration::ZERO)).await;
+
+        let stream = tokio_stream::iter(1..)
+            .take(count.unwrap_or(10_usize))
+            .map(|id| {
+                let timestamp = UNIX_EPOCH.elapsed().unwrap_or_default().as_millis();
+                #[allow(clippy::useless_conversion)]
+                Event::default()
+                    .data(
+                        serde_json::to_string(&data::SseData { id, timestamp }).unwrap_or_default(),
+                    )
+                    .event("ping")
+                    .try_into()
+            })
+            .throttle(duration.unwrap_or(Duration::from_secs(1)));
+
+        Sse::new(stream).into_response()
+    }
 }
 mod links {
+
     use super::*;
 
     #[derive(Debug, Deserialize)]
@@ -612,8 +626,8 @@ mod links {
             return Redirect::to(format!("/links/{}/0", total).as_str()).into_response();
         }
         let cur = page.unwrap();
-
         let total = std::cmp::min(total, 256);
+        tracing::info!(cur, total);
 
         let mut env = minijinja::Environment::new();
         env.set_trim_blocks(true);
@@ -621,22 +635,23 @@ mod links {
 
         let html = env
             .render_str(
-                r#"
-    <html>
-        <head>
-            <title>Links</title>
-        </head>
-        <body>
-        {% for idx in range(total) %}
-            {% if idx == cur %}
-                {{idx}}
-            {% else %}
-                <a href="/links/{{total}}/{{idx}}">{{idx}}</a>
-            {% endif %}
-        {% endfor %}
-        </body>
-    </html>
-    "#,
+                indoc::indoc! {
+                                                                                        r#"
+        <html>
+            <head>
+                <title>Links</title>
+            </head>
+            <body>
+            {% for idx in range(total) %}
+                {% if idx == cur %}
+                    {{idx}}
+                {% else %}
+                    <a href="/links/{{total}}/{{idx}}">{{idx}}</a>
+                {% endif %}
+            {% endfor %}
+            </body>
+        </html>
+    "#},
                 minijinja::context! {total, cur},
             )
             .unwrap();
