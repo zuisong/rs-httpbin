@@ -1,11 +1,8 @@
-use std::str::FromStr;
-
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
 use hyper_util::client::legacy::Client;
-use serde_json::{json, Value};
 use tokio::net::TcpListener;
 use tower::ServiceExt;
 
@@ -77,6 +74,8 @@ mod image_test {
         png = { "png" },
         svg = { "svg" },
         webp = { "webp" },
+        jxl = { "jxl" },
+        avif = { "avif" },
     )]
     #[test_macro(tokio::test)]
     async fn image_type(type_: &str) {
@@ -99,26 +98,37 @@ mod image_test {
     }
 }
 
-#[tokio::test()]
-async fn json() {
-    let app = app();
+mod data_test {
+    use super::*;
+    macro_rules! define_data_test {
+        ($name:ident, $path:expr, $content_type:expr) => {
+            #[tokio::test()]
+            pub(crate) async fn $name() {
+                let app = app();
 
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method(Method::GET)
-                .uri("/json")
-                .header(CONTENT_TYPE, APPLICATION_JSON.as_ref())
-                .body(Body::from(serde_json::to_vec(&json!([1, 2, 3, 4])).unwrap()))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
+                let response = app
+                    .oneshot(
+                        Request::builder()
+                            .method(Method::GET)
+                            .uri($path)
+                            .body(Body::empty())
+                            .unwrap(),
+                    )
+                    .await
+                    .unwrap();
 
-    assert_eq!(response.status(), StatusCode::OK);
+                assert_eq!(response.status(), StatusCode::OK);
 
-    let body = response.body_as_json().await;
-    assert_eq!(body, Value::from_str(include_str!("../assets/sample.json")).unwrap());
+                let body = response.body_as_string().await;
+                assert_eq!(body, include_str!($content_type));
+            }
+        };
+    }
+
+    define_data_test!(json, "/json", "../assets/sample.json");
+    define_data_test!(xml, "/xml", "../assets/sample.xml");
+    define_data_test!(html, "/html", "../assets/sample.html");
+    define_data_test!(forms_post, "/forms/post", "../assets/forms_post.html");
 }
 
 #[tokio::test]
