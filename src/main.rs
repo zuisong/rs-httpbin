@@ -119,10 +119,7 @@ fn app() -> Router<()> {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "DEBUG".into()),
-        )
+        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "DEBUG".into()))
         .with(tracing_subscriber::fmt::layer())
         .init();
 
@@ -151,19 +148,14 @@ async fn main() {
     ));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("Listening on http://{}", listener.local_addr().unwrap());
-    axum::serve(
-        listener,
-        app.into_make_service_with_connect_info::<SocketAddr>(),
-    )
-    .await
-    .unwrap();
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+        .unwrap();
 }
 
 async fn user_agent(user_agent: Option<TypedHeader<UserAgent>>) -> impl IntoResponse {
     ErasedJson::pretty(data::UserAgent {
-        user_agent: user_agent
-            .map(|h| h.0.to_string())
-            .unwrap_or("".to_string()),
+        user_agent: user_agent.map(|h| h.0.to_string()).unwrap_or("".to_string()),
     })
 }
 
@@ -190,8 +182,7 @@ mod basic_auth {
             None => (None, None),
             Some(auth) => (auth.username().into(), auth.password().into()),
         };
-        let authorized = Some(passwd.as_str()) == basic_auth_password
-            && Some(user.as_str()) == basic_auth_username;
+        let authorized = Some(passwd.as_str()) == basic_auth_password && Some(user.as_str()) == basic_auth_username;
         let body = ErasedJson::pretty(BasicAuth {
             authorized,
             user: basic_auth_username.unwrap_or("").to_string(),
@@ -219,8 +210,7 @@ mod basic_auth {
             None => (None, None),
             Some(auth) => (auth.username().into(), auth.password().into()),
         };
-        let authorized = Some(passwd.as_str()) == basic_auth_password
-            && Some(user.as_str()) == basic_auth_username;
+        let authorized = Some(passwd.as_str()) == basic_auth_password && Some(user.as_str()) == basic_auth_username;
         if authorized {
             (
                 StatusCode::OK,
@@ -251,11 +241,7 @@ fn get_headers(header_map: &HeaderMap) -> BTreeMap<String, Vec<String>> {
         let header_values: Vec<_> = header_map
             .get_all(key)
             .iter()
-            .map(|v| {
-                v.to_str()
-                    .map(|v| v.to_string())
-                    .unwrap_or_else(|err| err.to_string())
-            })
+            .map(|v| v.to_str().map(|v| v.to_string()).unwrap_or_else(|err| err.to_string()))
             .collect();
 
         headers.insert(key.to_string(), header_values);
@@ -388,10 +374,7 @@ async fn response_headers(Query(query): Query<BTreeMap<String, Vec<String>>>) ->
 
 async fn robots_txt() -> impl IntoResponse {
     (
-        [(
-            CONTENT_TYPE,
-            HeaderValue::from_static(mime::TEXT_PLAIN_UTF_8.as_ref()),
-        )],
+        [(CONTENT_TYPE, HeaderValue::from_static(mime::TEXT_PLAIN_UTF_8.as_ref()))],
         include_str!("../assets/robots.txt"),
     )
 }
@@ -399,33 +382,19 @@ async fn robots_txt() -> impl IntoResponse {
 mod resp_data {
     use super::*;
 
-    pub(crate) async fn json() -> impl IntoResponse {
-        (
-            [(CONTENT_TYPE, APPLICATION_JSON.essence_str())],
-            include_str!("../assets/sample.json"),
-        )
+    macro_rules! define_data_response {
+        ($name:ident, $path:expr, $content_type:expr) => {
+            pub(crate) async fn $name() -> impl IntoResponse {
+                let body = include_str!($path);
+                ([(CONTENT_TYPE, $content_type)], body)
+            }
+        };
     }
 
-    pub(crate) async fn xml() -> impl IntoResponse {
-        (
-            [(CONTENT_TYPE, TEXT_XML.essence_str())],
-            include_str!("../assets/sample.xml"),
-        )
-    }
-
-    pub(crate) async fn html() -> impl IntoResponse {
-        (
-            [(CONTENT_TYPE, TEXT_HTML_UTF_8.essence_str())],
-            include_str!("../assets/sample.html"),
-        )
-    }
-
-    pub(crate) async fn forms_post() -> impl IntoResponse {
-        (
-            [(CONTENT_TYPE, TEXT_HTML_UTF_8.essence_str())],
-            include_str!("../assets/forms_post.html"),
-        )
-    }
+    define_data_response!(json, "../assets/sample.json", APPLICATION_JSON.essence_str());
+    define_data_response!(xml, "../assets/sample.xml", TEXT_XML.essence_str());
+    define_data_response!(html, "../assets/sample.html", TEXT_HTML_UTF_8.essence_str());
+    define_data_response!(forms_post, "../assets/forms_post.html", TEXT_HTML_UTF_8.essence_str());
 }
 
 mod image {
@@ -454,51 +423,21 @@ mod image {
         StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response()
     }
 
-    pub(crate) async fn jpeg() -> Response {
-        (
-            [(CONTENT_TYPE, "image/jpeg")],
-            include_bytes!("../assets/jpeg.jpeg"),
-        )
-            .into_response()
+    macro_rules! define_image_response {
+        ($name:ident, $path:expr, $content_type:expr) => {
+            pub(crate) async fn $name() -> Response {
+                let bytes = include_bytes!($path);
+                ([(CONTENT_TYPE, $content_type)], bytes).into_response()
+            }
+        };
     }
 
-    pub(crate) async fn svg() -> Response {
-        (
-            [(CONTENT_TYPE, "image/svg")],
-            include_bytes!("../assets/svg.svg"),
-        )
-            .into_response()
-    }
-
-    pub(crate) async fn png() -> Response {
-        (
-            [(CONTENT_TYPE, "image/png")],
-            include_bytes!("../assets/png.png"),
-        )
-            .into_response()
-    }
-
-    pub(crate) async fn webp() -> Response {
-        (
-            [(CONTENT_TYPE, "image/webp")],
-            include_bytes!("../assets/webp.webp"),
-        )
-            .into_response()
-    }
-    pub(crate) async fn jxl() -> Response {
-        (
-            [(CONTENT_TYPE, "image/jxl")],
-            include_bytes!("../assets/jxl.jxl"),
-        )
-            .into_response()
-    }
-    pub(crate) async fn avif() -> Response {
-        (
-            [(CONTENT_TYPE, "image/avif")],
-            include_bytes!("../assets/avif.avif"),
-        )
-            .into_response()
-    }
+    define_image_response!(jpeg, "../assets/jpeg.jpeg", "image/jpeg");
+    define_image_response!(svg, "../assets/svg.svg", "image/svg");
+    define_image_response!(png, "../assets/png.png", "image/png");
+    define_image_response!(webp, "../assets/webp.webp", "image/webp");
+    define_image_response!(jxl, "../assets/jxl.jxl", "image/jxl");
+    define_image_response!(avif, "../assets/avif.avif", "image/avif");
 }
 async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
     ErasedJson::pretty(data::Ip { origin }).into_response()
@@ -510,11 +449,7 @@ mod redirect {
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
             1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
-            2.. => (
-                StatusCode::FOUND,
-                [(LOCATION, format!("/redirect/{}", n - 1))],
-            )
-                .into_response(),
+            2.. => (StatusCode::FOUND, [(LOCATION, format!("/redirect/{}", n - 1))]).into_response(),
         }
     }
 
@@ -532,12 +467,7 @@ mod redirect {
             2.. => (StatusCode::FOUND, [(LOCATION, format!("./{}", n - 1))]).into_response(),
         }
     }
-    pub(crate) async fn absolute_redirect(
-        Path(n): Path<i32>,
-        uri: Uri,
-        Host(host): Host,
-        _req: Request,
-    ) -> Response {
+    pub(crate) async fn absolute_redirect(Path(n): Path<i32>, uri: Uri, Host(host): Host, _req: Request) -> Response {
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
             1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
@@ -605,13 +535,7 @@ mod sse {
         pub delay: Option<Duration>,
     }
 
-    pub async fn sse_handler(
-        Query(SeeParam {
-            delay,
-            duration,
-            count,
-        }): Query<SeeParam>,
-    ) -> Response {
+    pub async fn sse_handler(Query(SeeParam { delay, duration, count }): Query<SeeParam>) -> Response {
         tokio::time::sleep(delay.unwrap_or(Duration::ZERO)).await;
 
         let stream = tokio_stream::iter(1..)
@@ -620,9 +544,7 @@ mod sse {
                 let timestamp = UNIX_EPOCH.elapsed().unwrap_or_default().as_millis();
                 #[allow(clippy::useless_conversion)]
                 Event::default()
-                    .data(
-                        serde_json::to_string(&data::SseData { id, timestamp }).unwrap_or_default(),
-                    )
+                    .data(serde_json::to_string(&data::SseData { id, timestamp }).unwrap_or_default())
                     .event("ping")
                     .try_into()
             })
@@ -656,7 +578,7 @@ mod links {
         let html = env
             .render_str(
                 indoc::indoc! {
-                                                                                        r#"
+                                                                                                                r#"
         <html>
             <head>
                 <title>Links</title>

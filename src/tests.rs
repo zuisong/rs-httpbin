@@ -95,10 +95,7 @@ mod image_test {
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = response.headers().get(CONTENT_TYPE);
-        assert_eq!(
-            body,
-            (HeaderValue::try_from(format!("image/{type_}")).ok()).as_ref()
-        );
+        assert_eq!(body, (HeaderValue::try_from(format!("image/{type_}")).ok()).as_ref());
     }
 }
 
@@ -112,9 +109,7 @@ async fn json() {
                 .method(Method::GET)
                 .uri("/json")
                 .header(CONTENT_TYPE, APPLICATION_JSON.as_ref())
-                .body(Body::from(
-                    serde_json::to_vec(&json!([1, 2, 3, 4])).unwrap(),
-                ))
+                .body(Body::from(serde_json::to_vec(&json!([1, 2, 3, 4])).unwrap()))
                 .unwrap(),
         )
         .await
@@ -123,10 +118,7 @@ async fn json() {
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = response.body_as_json().await;
-    assert_eq!(
-        body,
-        Value::from_str(include_str!("../assets/sample.json")).unwrap()
-    );
+    assert_eq!(body, Value::from_str(include_str!("../assets/sample.json")).unwrap());
 }
 
 #[tokio::test]
@@ -134,12 +126,7 @@ async fn not_found() {
     let app = app();
 
     let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/does-not-exist")
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .oneshot(Request::builder().uri("/does-not-exist").body(Body::empty()).unwrap())
         .await
         .unwrap();
 
@@ -154,12 +141,9 @@ async fn the_real_deal() {
     let addr = listener.local_addr().unwrap();
 
     tokio::spawn(async move {
-        axum::serve(
-            listener,
-            app().into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .await
-        .unwrap();
+        axum::serve(listener, app().into_make_service_with_connect_info::<SocketAddr>())
+            .await
+            .unwrap();
     });
 
     let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
