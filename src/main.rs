@@ -70,11 +70,15 @@ fn app() -> Router<()> {
         .route("/uuid", any(uuid))
         .route("/response-headers", any(response_headers))
         .route("/ip", any(ip))
+        //
         .route("/image", any(image::image))
         .route("/image/jpeg", any(image::jpeg))
         .route("/image/svg", any(image::svg))
         .route("/image/png", any(image::png))
         .route("/image/webp", any(image::webp))
+        .route("/image/avif", any(image::avif))
+        .route("/image/jxl", any(image::jxl))
+        //
         .route("/base64/:value", any(base64::base64_decode))
         .route("/base64/encode/:value", any(base64::base64_encode))
         .route("/base64/decode/:value", any(base64::base64_decode))
@@ -440,6 +444,8 @@ mod image {
                     "svg" => return svg().await,
                     "png" => return png().await,
                     "webp" => return webp().await,
+                    "avif" => return avif().await,
+                    "jxl" => return jxl().await,
                     _ => continue,
                 }
             }
@@ -476,6 +482,20 @@ mod image {
         (
             [(CONTENT_TYPE, "image/webp")],
             include_bytes!("../assets/webp.webp"),
+        )
+            .into_response()
+    }
+    pub(crate) async fn jxl() -> Response {
+        (
+            [(CONTENT_TYPE, "image/jxl")],
+            include_bytes!("../assets/jxl.jxl"),
+        )
+            .into_response()
+    }
+    pub(crate) async fn avif() -> Response {
+        (
+            [(CONTENT_TYPE, "image/avif")],
+            include_bytes!("../assets/avif.avif"),
         )
             .into_response()
     }
