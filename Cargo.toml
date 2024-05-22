@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.7.5", features = ["http2"] }
-comrak = { version = "0.23.0", default-features = false }
+comrak = { version = "0.24.0", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 tokio = { version = "1", features = ["rt-multi-thread"] }
@@ -38,6 +38,7 @@ tokio-stream = { version = "0.1.15", features = ["tokio-util"] }
 time = "0.3.36"
 minijinja = "2.0.1"
 indoc = "2.0.5"
+fastrand = "2.1.0"
 
 [dependencies.uuid]
 version = "1.8.0"

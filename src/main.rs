@@ -92,6 +92,7 @@ fn app() -> Router<()> {
         .route("/links/:total", any(links::links))
         .route("/links/:total/:page", any(links::links))
         .route("/redirect-to", any(redirect::redirect_to))
+        .route("/unstable", get(unstable))
         .route("/delay/:n", any(anything).layer({
             async fn delay(Path(delays): Path<u16>, request: Request, next: middleware::Next) -> impl IntoResponse {
                 tokio::time::sleep(Duration::from_secs(delays.min(10).into())).await;
@@ -165,6 +166,31 @@ async fn headers(header_map: HeaderMap) -> impl IntoResponse {
     })
 }
 
+#[derive(Deserialize)]
+struct UnstableQueryParam {
+    pub failure_rate: Option<f32>,
+}
+
+async fn unstable(Query(query): Query<UnstableQueryParam>) -> Response {
+    let failure_rate = query.failure_rate.unwrap_or(0.5);
+    if !matches!(failure_rate, 0.0..=1.0) {
+        return ErasedJson::pretty(json!(
+            {
+            "status_code": 400,
+            "error": "Bad Request",
+            "detail": "invalid failure rate: %!d(<nil>) not in range [0, 1]"
+        }
+                ))
+        .into_response();
+    }
+
+    if fastrand::f32() <= failure_rate {
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    ().into_response()
+}
+
 mod basic_auth {
     use super::*;
 
@@ -174,8 +200,14 @@ mod basic_auth {
         pub user: String,
     }
 
+    #[derive(Deserialize)]
+    pub struct BasicAuthParam {
+        user: String,
+        passwd: String,
+    }
+
     pub async fn basic_auth(
-        Path((user, passwd)): Path<(String, String)>,
+        Path(BasicAuthParam { user, passwd }): Path<BasicAuthParam>,
         basic_auth: Option<TypedHeader<Authorization<Basic>>>,
     ) -> impl IntoResponse {
         let (basic_auth_username, basic_auth_password) = match &basic_auth {
@@ -203,7 +235,7 @@ mod basic_auth {
     }
 
     pub async fn hidden_basic_auth(
-        Path((user, passwd)): Path<(String, String)>,
+        Path(BasicAuthParam { user, passwd }): Path<BasicAuthParam>,
         basic_auth: Option<TypedHeader<Authorization<Basic>>>,
     ) -> impl IntoResponse {
         let (basic_auth_username, basic_auth_password) = match &basic_auth {
@@ -248,6 +280,7 @@ fn get_headers(header_map: &HeaderMap) -> BTreeMap<String, Vec<String>> {
     }
     headers
 }
+
 mod cookies {
     use super::*;
 
@@ -439,9 +472,11 @@ mod image {
     define_image_response!(jxl, "../assets/jxl.jxl", "image/jxl");
     define_image_response!(avif, "../assets/avif.avif", "image/avif");
 }
+
 async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
     ErasedJson::pretty(data::Ip { origin }).into_response()
 }
+
 mod redirect {
     use super::*;
 
@@ -460,6 +495,7 @@ mod redirect {
             "detail": "redirect count must be > 0"
         }))
     }
+
     pub(crate) async fn relative_redirect(Path(n): Path<i32>) -> Response {
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
@@ -467,6 +503,7 @@ mod redirect {
             2.. => (StatusCode::FOUND, [(LOCATION, format!("./{}", n - 1))]).into_response(),
         }
     }
+
     pub(crate) async fn absolute_redirect(Path(n): Path<i32>, uri: Uri, Host(host): Host, _req: Request) -> Response {
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
@@ -553,8 +590,8 @@ mod sse {
         Sse::new(stream).into_response()
     }
 }
-mod links {
 
+mod links {
     use super::*;
 
     #[derive(Debug, Deserialize)]

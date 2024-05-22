@@ -65,7 +65,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /status/:code Returns given HTTP Status code.
 - [ ] /stream-bytes/:n Streams n random bytes of binary data, accepts optional seed and chunk_size integer parameters.
 - [ ] /stream/:n Streams min(n, 100) lines.
-- [ ] /unstable Fails half the time, accepts optional failure_rate float and seed integer parameters.
+- [x] [/unstable](/unstable?failure_rate=0.6) Fails half the time, accepts optional failure_rate float and seed integer parameters.
 - [x] [/user-agent](/user-agent) Returns user-agent.
 - [x] [/uuid](/uuid) Generates a UUIDv4 value.
 - [ ] /websocket/echo?max_fragment_size=2048&max_message_size=10240 A WebSocket echo service.
