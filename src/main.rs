@@ -22,6 +22,7 @@ use axum_extra::{
     response::ErasedJson,
     TypedHeader,
 };
+use axum_valid::Valid;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_XML};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -29,11 +30,12 @@ use tokio_stream::StreamExt;
 use tower_http::{
     compression::CompressionLayer,
     cors::CorsLayer,
+    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
     set_header::SetRequestHeaderLayer,
     trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-
+use validator::Validate;
 mod data;
 #[cfg(test)]
 mod tests;
@@ -117,6 +119,8 @@ fn app() -> Router<()> {
     router
 }
 
+const H: HeaderName = HeaderName::from_static("x-request-id");
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -127,12 +131,13 @@ async fn main() {
     let router: Router = app();
     let app = router.layer((
         CompressionLayer::new(),
+        SetRequestIdLayer::new(H.clone(), MakeRequestUuid),
         TraceLayer::new_for_http()
             .make_span_with(|request: &Request<Body>| {
-                let request_id = uuid::Uuid::new_v4();
+                let request_id = request.headers()[H.clone()].to_str().unwrap_or_default();
                 tracing::span!(
                     tracing::Level::DEBUG,
-                    "request",
+                    "request ",
                     method = display(request.method()),
                     uri = display(request.uri()),
                     version = debug(request.version()),
@@ -140,11 +145,8 @@ async fn main() {
                 )
             })
             .on_request(DefaultOnRequest::new().level(tracing::Level::INFO))
-            .on_response(
-                DefaultOnResponse::new()
-                    .level(tracing::Level::INFO)
-                    .include_headers(true),
-            ),
+            .on_response(DefaultOnResponse::new().level(tracing::Level::INFO)),
+        PropagateRequestIdLayer::new(H.clone()),
         CorsLayer::permissive(),
     ));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -166,16 +168,17 @@ async fn headers(header_map: HeaderMap) -> impl IntoResponse {
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Debug, Validate, Deserialize)]
 struct UnstableQueryParam {
+    #[validate(range(min = 0.0, max = 1.0))]
     pub failure_rate: Option<f32>,
 }
 
-async fn unstable(Query(query): Query<UnstableQueryParam>) -> Response {
+async fn unstable(Valid(Query(query)): Valid<Query<UnstableQueryParam>>) -> Response {
     let failure_rate = query.failure_rate.unwrap_or(0.5);
     if !matches!(failure_rate, 0.0..=1.0) {
         return ErasedJson::pretty(json!(
-            {
+        {
             "status_code": 400,
             "error": "Bad Request",
             "detail": "invalid failure rate: %!d(<nil>) not in range [0, 1]"

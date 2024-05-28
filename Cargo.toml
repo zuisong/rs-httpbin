@@ -31,6 +31,7 @@ tower-http = { version = "0.5", features = [
     "auth",
     "compression-full",
     "set-header",
+    "request-id",
 ] }
 humantime-serde = "1"
 hostname = "0.4.0"
@@ -39,6 +40,9 @@ time = "0.3.36"
 minijinja = "2.0.1"
 indoc = "2.0.5"
 fastrand = "2.1.0"
+axum-valid = { version = "0.18.0", features = ["full"] }
+validator = { version = "0.18.1", features = ["derive"] }
+tower = "0.4.13"
 
 [dependencies.uuid]
 version = "1.8.0"
@@ -58,3 +62,10 @@ opt-level = "z"   # Optimize for size.
 lto = true
 codegen-units = 1
 panic = "abort"
+
+
+[[bin]]
+path = "src/main.rs"
+name = "rs-httpbin"
+edition = "2021"
+required-features = []

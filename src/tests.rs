@@ -24,7 +24,7 @@ pub mod ext {
 
     impl<T> BodyExt for T
     where
-        T: http_body::Body + Send + 'static,
+        T: axum::body::HttpBody + Send + 'static,
         T::Data: Send,
         T::Error: std::fmt::Debug,
     {
