@@ -526,13 +526,16 @@ mod redirect {
         }
     }
 
-    #[derive(Debug, Deserialize)]
+    #[derive(Debug, Deserialize, Validate)]
     pub struct Params {
+        #[garde(length(min = 0))]
         url: String,
+        #[garde(range(min = 100, max = 999))]
         status_code: Option<u16>,
     }
 
-    pub async fn redirect_to(Query(Params { url, status_code }): Query<Params>) -> Response {
+    pub async fn redirect_to(WithValidation(p): WithValidation<Query<Params>>) -> Response {
+        let Params { url, status_code } = p.into_inner();
         let status_code = status_code.unwrap_or(302);
         (
             StatusCode::from_u16(status_code)
