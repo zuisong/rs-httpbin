@@ -22,7 +22,8 @@ use axum_extra::{
     response::ErasedJson,
     TypedHeader,
 };
-use axum_valid::Valid;
+use axum_garde::WithValidation;
+use garde::Validate;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_XML};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -35,7 +36,6 @@ use tower_http::{
     trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer},
 };
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
-use validator::Validate;
 mod data;
 #[cfg(test)]
 mod tests;
@@ -128,7 +128,7 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer())
         .init();
 
-    let router: Router = app();
+    let router = app();
     let app = router.layer((
         CompressionLayer::new(),
         SetRequestIdLayer::new(H.clone(), MakeRequestUuid),
@@ -170,11 +170,10 @@ async fn headers(header_map: HeaderMap) -> impl IntoResponse {
 
 #[derive(Debug, Validate, Deserialize)]
 struct UnstableQueryParam {
-    #[validate(range(min = 0.0, max = 1.0))]
+    #[garde(range(min = 0.0, max = 1.0))]
     pub failure_rate: Option<f32>,
 }
-
-async fn unstable(Valid(Query(query)): Valid<Query<UnstableQueryParam>>) -> Response {
+async fn unstable(WithValidation(query): WithValidation<Query<UnstableQueryParam>>) -> Response {
     let failure_rate = query.failure_rate.unwrap_or(0.5);
     if !matches!(failure_rate, 0.0..=1.0) {
         return ErasedJson::pretty(json!(
