@@ -4,16 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-axum = { version = "0.7.5", features = ["http2"] }
-comrak = { version = "0.24", default-features = false }
+axum = { version = "0.7.5", features = ["http2", "tower-log","matched-path"], default-features = false }
+markdown ={ version =  "1.0.0-alpha.17" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
-tokio = { version = "1", features = ["rt-multi-thread"] }
-tracing-subscriber = { version = "0.3", features = [
-    "tracing",
-    "env-filter",
-    "tracing-log",
-] }
+tokio = { version = "~1", features = ["rt-multi-thread"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing = "0.1"
 mime = "0.3"
 axum-extra = { version = "0.9", features = [
@@ -23,35 +19,33 @@ axum-extra = { version = "0.9", features = [
     "cookie",
 ] }
 axum-client-ip = "0.6"
-base64 = "0.22"
+base64 = "~0.21"
 tower-http = { version = "0.5", features = [
-    "tracing",
     "trace",
     "cors",
-    "auth",
     "compression-full",
     "set-header",
     "request-id",
+    "util",
 ] }
 humantime-serde = "1"
 hostname = "0.4.0"
-tokio-stream = { version = "0.1.15", features = ["tokio-util"] }
-time = "0.3.36"
+tokio-stream = { version = "0.1.15", features = ["time"], default-features = false }
+time = { version = "0.3.36", default-features = false }
 minijinja = "2.0.2"
 indoc = "2.0.5"
 fastrand = "2.1.0"
-axum_garde = { version = "0.19.0", features = ["axum-extra-query"] }
-garde = { version = "0.19.0", features = ["derive"] }
+axum_garde = { version = "0.19.2", features = ["axum-extra-query"] }
+garde = { version = "0.19.2", features = ["derive"] }
 tower = "0.4.13"
 
 [dependencies.uuid]
 version = "1.8.0"
-features = ["v4", "fast-rng"]
+features = ["v4"]
+default-features = false
 
 
 [dev-dependencies]
-http-body = "1.0.0"
-tower = "0.4.13"
 http-body-util = "0.1.2"
 hyper-util = { version = "0.1.5", features = ["client-legacy"] }
 yare = "3.0.0"

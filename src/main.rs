@@ -1,6 +1,6 @@
 use std::{
     collections::BTreeMap,
-    net::SocketAddr,
+    net::{Ipv4Addr, SocketAddr},
     str::FromStr,
     time::{Duration, UNIX_EPOCH},
 };
@@ -8,7 +8,7 @@ use std::{
 use ::base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use axum::{
     body::{Body, Bytes},
-    extract::{Host, Path, Request},
+    extract::{Host, MatchedPath, Path, Request},
     http::{header::*, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
     middleware,
     response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
@@ -28,15 +28,16 @@ use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_XML};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio_stream::StreamExt;
+use tower::ServiceBuilder;
 use tower_http::{
-    compression::CompressionLayer,
-    cors::CorsLayer,
-    request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer},
-    set_header::SetRequestHeaderLayer,
-    trace::{DefaultOnRequest, DefaultOnResponse, TraceLayer},
+    cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer,
+    ServiceBuilderExt,
 };
+use tracing::debug_span;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+
 mod data;
+
 #[cfg(test)]
 mod tests;
 
@@ -119,38 +120,33 @@ fn app() -> Router<()> {
     router
 }
 
-const H: HeaderName = HeaderName::from_static("x-request-id");
-
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "DEBUG".into()))
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().json())
         .init();
 
     let router = app();
-    let app = router.layer((
-        CompressionLayer::new(),
-        SetRequestIdLayer::new(H.clone(), MakeRequestUuid),
-        TraceLayer::new_for_http()
-            .make_span_with(|request: &Request<Body>| {
-                let request_id = request.headers()[H.clone()].to_str().unwrap_or_default();
-                tracing::span!(
-                    tracing::Level::DEBUG,
-                    "request ",
-                    method = display(request.method()),
-                    uri = display(request.uri()),
-                    version = debug(request.version()),
-                    request_id = display(request_id)
-                )
-            })
-            .on_request(DefaultOnRequest::new().level(tracing::Level::INFO))
-            .on_response(DefaultOnResponse::new().level(tracing::Level::INFO)),
-        PropagateRequestIdLayer::new(H.clone()),
-        CorsLayer::permissive(),
-    ));
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Listening on http://{}", listener.local_addr().unwrap());
+
+    let service = ServiceBuilder::default()
+        .set_x_request_id(MakeRequestUuid)
+        .propagate_x_request_id()
+        .compression()
+        .layer(TraceLayer::new_for_http().make_span_with(|request: &Request<Body>| {
+            let request_id = request.headers()["x-request-id"].to_str().ok();
+            let matched_path = request.extensions().get::<MatchedPath>().map(MatchedPath::as_str);
+            let method = request.method().as_str();
+            debug_span!("request_id", method, matched_path, request_id,)
+        }))
+        .layer(CorsLayer::permissive());
+
+    let app = router.layer(service);
+
+    let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 3000))
+        .await
+        .unwrap();
+    eprintln!("Listening on http://{}", listener.local_addr().unwrap());
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
         .await
         .unwrap();
@@ -173,6 +169,7 @@ struct UnstableQueryParam {
     #[garde(range(min = 0.0, max = 1.0))]
     pub failure_rate: Option<f32>,
 }
+
 async fn unstable(WithValidation(query): WithValidation<Query<UnstableQueryParam>>) -> Response {
     let failure_rate = query.failure_rate.unwrap_or(0.5);
     if !matches!(failure_rate, 0.0..=1.0) {
@@ -352,10 +349,9 @@ async fn anything(
 
 async fn index() -> Html<String> {
     let md = include_str!("../README.md");
-    let mut options = comrak::Options::default();
-    options.extension.tasklist = true;
     Html(
-        comrak::markdown_to_html(md, &options)
+        markdown::to_html_with_options(md, &markdown::Options::gfm()).unwrap()
+            // language=html
             + (r#"
 <style>
   @media (prefers-color-scheme: dark) {
@@ -599,18 +595,21 @@ mod sse {
 mod links {
     use super::*;
 
-    #[derive(Debug, Deserialize)]
+    #[derive(Debug, Deserialize, Validate)]
     pub struct LinksParam {
+        #[garde(range(min = 0, max = 256))]
         pub total: u32,
+        #[garde(range(min = 0))]
         pub page: Option<u32>,
     }
 
-    pub async fn links(Path(LinksParam { total, page }): Path<LinksParam>) -> Response {
+    pub async fn links(WithValidation(p): WithValidation<Path<LinksParam>>) -> Response {
+        let LinksParam { total, page } = p.into_inner();
+
         if page.is_none() {
             return Redirect::to(format!("/links/{}/0", total).as_str()).into_response();
         }
         let cur = page.unwrap();
-        let total = std::cmp::min(total, 256);
         tracing::info!(cur, total);
 
         let mut env = minijinja::Environment::new();
@@ -620,7 +619,8 @@ mod links {
         let html = env
             .render_str(
                 indoc::indoc! {
-                                                                                                                r#"
+                                                                                                                // language=html
+r#"
         <html>
             <head>
                 <title>Links</title>
@@ -635,7 +635,7 @@ mod links {
             {% endfor %}
             </body>
         </html>
-    "#},
+"#},
                 minijinja::context! {total, cur},
             )
             .unwrap();

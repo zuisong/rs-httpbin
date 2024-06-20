@@ -2,11 +2,11 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use hyper_util::client::legacy::Client;
+use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use tokio::net::TcpListener;
 use tower::ServiceExt;
+use yare::parameterized;
 
-#[cfg(test)]
 use super::*;
 use crate::tests::ext::BodyExt as _;
 
@@ -60,12 +60,6 @@ async fn index() {
 }
 
 mod image_test {
-    use axum::{
-        body::Body,
-        http::{Request, StatusCode},
-    };
-    use tower::ServiceExt;
-    use yare::parameterized;
 
     use super::*;
 
@@ -156,7 +150,7 @@ async fn the_real_deal() {
             .unwrap();
     });
 
-    let client = Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+    let client = Client::builder(TokioExecutor::new()).build_http();
 
     let response = client
         .request(
