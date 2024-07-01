@@ -267,15 +267,12 @@ mod basic_auth {
 }
 
 fn get_headers(header_map: &HeaderMap) -> BTreeMap<String, Vec<String>> {
-    let mut headers = BTreeMap::new();
-    for key in header_map.keys() {
-        let header_values: Vec<_> = header_map
-            .get_all(key)
-            .iter()
-            .map(|v| v.to_str().map(|v| v.to_string()).unwrap_or_else(|err| err.to_string()))
-            .collect();
+    let mut headers: BTreeMap<String, Vec<String>> = BTreeMap::new();
 
-        headers.insert(key.to_string(), header_values);
+    for (k, v) in header_map {
+        let v = String::from_utf8_lossy(v.as_bytes()).to_string();
+        let values = headers.entry(k.as_str().to_string()).or_default();
+        values.push(v);
     }
     headers
 }
@@ -618,8 +615,8 @@ mod links {
 
         let html = env
             .render_str(
+                // language=html
                 indoc::indoc! {
-                                                                                                                // language=html
 r#"
         <html>
             <head>

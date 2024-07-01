@@ -5,7 +5,6 @@ use axum::{
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use tokio::net::TcpListener;
 use tower::ServiceExt;
-use yare::parameterized;
 
 use super::*;
 use crate::tests::ext::BodyExt as _;
@@ -59,70 +58,55 @@ async fn index() {
     assert!(body.contains("rs-httpbin"));
 }
 
-mod image_test {
+#[test_case::test_case( "jpeg" ; "jpeg"   )]
+#[test_case::test_case( "png"  ; "png"    )]
+#[test_case::test_case( "svg"  ; "svg"    )]
+#[test_case::test_case( "webp"  ; "webp"   )]
+#[test_case::test_case( "jxl"  ; "jxl"    )]
+#[test_case::test_case( "avif"  ; "avif"   )]
+#[tokio::test]
+async fn image_type(type_: &str) {
+    let app = app();
 
-    use super::*;
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(format!("/image/{type_}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-    #[parameterized(
-        jpeg = { "jpeg" },
-        png = { "png" },
-        svg = { "svg" },
-        webp = { "webp" },
-        jxl = { "jxl" },
-        avif = { "avif" },
-    )]
-    #[test_macro(tokio::test)]
-    async fn image_type(type_: &str) {
-        let app = app();
+    assert_eq!(response.status(), StatusCode::OK);
 
-        let response = app
-            .oneshot(
-                Request::builder()
-                    .uri(format!("/image/{type_}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-
-        assert_eq!(response.status(), StatusCode::OK);
-
-        let body = response.headers().get(CONTENT_TYPE);
-        assert_eq!(body, (HeaderValue::try_from(format!("image/{type_}")).ok()).as_ref());
-    }
+    let body = response.headers().get(CONTENT_TYPE);
+    assert_eq!(body, (HeaderValue::try_from(format!("image/{type_}")).ok()).as_ref());
 }
 
-mod data_test {
-    use super::*;
-    macro_rules! define_data_test {
-        ($name:ident, $path:expr, $content_type:expr) => {
-            #[tokio::test()]
-            pub(crate) async fn $name() {
-                let app = app();
+#[test_case::test_case(   "./assets/sample.json" ,   "/json" ; "json"   )]
+#[test_case::test_case(   "./assets/sample.xml" ,   "/xml"  ; "xml"    )]
+#[test_case::test_case(   "./assets/sample.html" ,   "/html"  ; "html"    )]
+#[test_case::test_case(   "./assets/forms_post.html" ,   "/forms/post"  ; "forms_post"   )]
+#[tokio::test]
+pub async fn data(body_file: &str, path: &str) {
+    let app = app();
 
-                let response = app
-                    .oneshot(
-                        Request::builder()
-                            .method(Method::GET)
-                            .uri($path)
-                            .body(Body::empty())
-                            .unwrap(),
-                    )
-                    .await
-                    .unwrap();
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(Method::GET)
+                .uri(path)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
 
-                assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(response.status(), StatusCode::OK);
 
-                let body = response.body_as_string().await;
-                assert_eq!(body, include_str!($content_type));
-            }
-        };
-    }
-
-    define_data_test!(json, "/json", "../assets/sample.json");
-    define_data_test!(xml, "/xml", "../assets/sample.xml");
-    define_data_test!(html, "/html", "../assets/sample.html");
-    define_data_test!(forms_post, "/forms/post", "../assets/forms_post.html");
+    let body = response.body_as_string().await;
+    assert_eq!(body, std::fs::read_to_string(body_file).unwrap());
 }
 
 #[tokio::test]
