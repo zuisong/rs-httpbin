@@ -1,3 +1,4 @@
+use ::base64::prelude::BASE64_STANDARD;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
@@ -149,8 +150,76 @@ async fn the_real_deal() {
     let body = response.body_as_json().await;
     assert_eq!(
         body,
-        serde_json::json! {
+        json! {
             {"origin": "127.0.0.1"}
         }
+    );
+}
+
+#[tokio::test]
+async fn basic_auth() {
+    let app = app();
+
+    let response = app
+        .clone()
+        .oneshot(Request::builder().uri("/basic-auth/a/b").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response.body_as_json().await,
+        json!({
+            "authorized": false,
+            "user": ""
+        })
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/basic-auth/a/b")
+                .header(
+                    "Authorization",
+                    format!("Basic {}", BASE64_STANDARD.encode("a1:a").as_str()),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    assert_eq!(
+        response.body_as_json().await,
+        json!({
+            "authorized": false,
+            "user": "a1"
+        })
+    );
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/basic-auth/a/b")
+                .header(
+                    "Authorization",
+                    format!("Basic {}", BASE64_STANDARD.encode("a:b").as_str()),
+                )
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.body_as_json().await,
+        json!({
+            "authorized": true,
+            "user": "a"
+        })
     );
 }

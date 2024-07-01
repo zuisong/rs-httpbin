@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    default::Default,
     net::{Ipv4Addr, SocketAddr},
     str::FromStr,
     time::{Duration, UNIX_EPOCH},
@@ -209,14 +210,13 @@ mod basic_auth {
         Path(BasicAuthParam { user, passwd }): Path<BasicAuthParam>,
         basic_auth: Option<TypedHeader<Authorization<Basic>>>,
     ) -> impl IntoResponse {
-        let (basic_auth_username, basic_auth_password) = match &basic_auth {
-            None => (None, None),
-            Some(auth) => (auth.username().into(), auth.password().into()),
+        let authorized = match &basic_auth {
+            None => false,
+            Some(auth) => auth.username() == user && auth.password() == passwd,
         };
-        let authorized = Some(passwd.as_str()) == basic_auth_password && Some(user.as_str()) == basic_auth_username;
         let body = ErasedJson::pretty(BasicAuth {
             authorized,
-            user: basic_auth_username.unwrap_or("").to_string(),
+            user: basic_auth.map(|it| it.username().to_string()).unwrap_or_default(),
         });
         if authorized {
             (StatusCode::OK, body).into_response()
@@ -237,17 +237,17 @@ mod basic_auth {
         Path(BasicAuthParam { user, passwd }): Path<BasicAuthParam>,
         basic_auth: Option<TypedHeader<Authorization<Basic>>>,
     ) -> impl IntoResponse {
-        let (basic_auth_username, basic_auth_password) = match &basic_auth {
-            None => (None, None),
-            Some(auth) => (auth.username().into(), auth.password().into()),
+        let authorized = match basic_auth {
+            None => false,
+            Some(auth) => auth.username() == user && auth.password() == passwd,
         };
-        let authorized = Some(passwd.as_str()) == basic_auth_password && Some(user.as_str()) == basic_auth_username;
+
         if authorized {
             (
                 StatusCode::OK,
                 ErasedJson::pretty(BasicAuth {
                     authorized,
-                    user: basic_auth_username.unwrap_or("").to_string(),
+                    user: if authorized { user } else { Default::default() },
                 }),
             )
                 .into_response()
