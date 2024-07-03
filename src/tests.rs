@@ -59,14 +59,14 @@ async fn index() {
     assert!(body.contains("rs-httpbin"));
 }
 
-#[test_case::test_case( "jpeg" ; "jpeg"   )]
-#[test_case::test_case( "png"  ; "png"    )]
-#[test_case::test_case( "svg"  ; "svg"    )]
-#[test_case::test_case( "webp"  ; "webp"   )]
-#[test_case::test_case( "jxl"  ; "jxl"    )]
-#[test_case::test_case( "avif"  ; "avif"   )]
+#[test_case::test_case("jpeg")]
+#[test_case::test_case("png")]
+#[test_case::test_case("svg")]
+#[test_case::test_case("webp")]
+#[test_case::test_case("jxl")]
+#[test_case::test_case("avif")]
 #[tokio::test]
-async fn image_type(type_: &str) {
+async fn image_type(type_: &'static str) {
     let app = app();
 
     let response = app
@@ -85,10 +85,10 @@ async fn image_type(type_: &str) {
     assert_eq!(body, (HeaderValue::try_from(format!("image/{type_}")).ok()).as_ref());
 }
 
-#[test_case::test_case(   "./assets/sample.json" ,   "/json" ; "json"   )]
-#[test_case::test_case(   "./assets/sample.xml" ,   "/xml"  ; "xml"    )]
-#[test_case::test_case(   "./assets/sample.html" ,   "/html"  ; "html"    )]
-#[test_case::test_case(   "./assets/forms_post.html" ,   "/forms/post"  ; "forms_post"   )]
+#[test_case::test_case("./assets/sample.json", "/json")]
+#[test_case::test_case("./assets/sample.xml", "/xml")]
+#[test_case::test_case("./assets/sample.html", "/html")]
+#[test_case::test_case("./assets/forms_post.html", "/forms/post")]
 #[tokio::test]
 pub async fn data(body_file: &str, path: &str) {
     let app = app();
