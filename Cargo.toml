@@ -20,15 +20,16 @@ time = { version = "0.3", default-features = false }
 minijinja = "2"
 indoc = "2"
 fastrand = "2"
-axum_garde = { version = "0.19", features = ["axum-extra-query"] }
-garde = { version = "0.19", features = ["derive"] }
+axum_garde = { version = "0.20.0", features = ["axum-extra-query"] }
+garde = { version = "0.20.0", features = ["derive"] }
 tower = "0.4"
 multer = { version = "3", default-features= false  }
 serde_urlencoded = "0.7.1"
+futures-util = "0.3.30"
 
 [dependencies.axum]
-version = "0.7"
-features = ["http2", "tower-log", "matched-path"]
+version = "0.7.5"
+features = ["http2", "tower-log", "matched-path", "ws"]
 default-features = false
 
 [dependencies.axum-extra]

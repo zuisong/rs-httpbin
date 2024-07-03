@@ -27,9 +27,6 @@ pub struct Http {
     pub args: BTreeMap<String, Vec<String>>,
     pub data: String,
     pub json: Option<serde_json::Value>,
-    // todo
-    // files
-    // form
     pub form: BTreeMap<String, Vec<String>>,
     pub files: BTreeMap<String, Vec<String>>,
 }

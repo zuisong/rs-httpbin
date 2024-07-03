@@ -38,6 +38,8 @@ use tracing::debug_span;
 use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod data;
+mod ws;
+
 #[cfg(test)]
 mod tests;
 
@@ -103,6 +105,7 @@ fn app() -> Router<()> {
             }
             middleware::from_fn(delay)
         }))
+        .route("/websocket/echo", any(ws::ws_handler))
 
         //keep me
         ;
