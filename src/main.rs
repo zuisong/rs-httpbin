@@ -6,7 +6,6 @@ use std::{
     time::{Duration, UNIX_EPOCH},
 };
 
-use ::base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use axum::{
     body::{Body, Bytes},
     extract::{Host, MatchedPath, Path, Request},
@@ -24,6 +23,7 @@ use axum_extra::{
     TypedHeader,
 };
 use axum_garde::WithValidation;
+use base64::{prelude::BASE64_STANDARD, Engine};
 use garde::Validate;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_XML};
 use serde::{Deserialize, Serialize};
@@ -83,9 +83,9 @@ fn app() -> Router<()> {
         .route("/image/avif", any(image::avif))
         .route("/image/jxl", any(image::jxl))
         //
-        .route("/base64/:value", any(base64::base64_decode))
-        .route("/base64/encode/:value", any(base64::base64_encode))
-        .route("/base64/decode/:value", any(base64::base64_decode))
+        .route("/base64/:value", any(base_64::base64_decode))
+        .route("/base64/encode/:value", any(base_64::base64_encode))
+        .route("/base64/decode/:value", any(base_64::base64_decode))
         .route("/forms/post", any(resp_data::forms_post))
         .route("/sse", any(sse::sse_handler))
         .route("/cookies", any(cookies::cookies))
@@ -321,7 +321,7 @@ async fn anything(
 
     let body_string = match String::from_utf8(body.to_vec()) {
         Ok(body) => body,
-        Err(_) => BASE64.encode(&body),
+        Err(_) => BASE64_STANDARD.encode(&body),
     };
 
     let json = content_type.and_then(|TypedHeader(content_type)| {
@@ -541,20 +541,20 @@ mod redirect {
     }
 }
 
-mod base64 {
+mod base_64 {
     use super::*;
 
     pub(crate) async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
         (
             [(CONTENT_TYPE, TEXT_PLAIN.as_ref())],
-            BASE64
+            BASE64_STANDARD
                 .decode(base64_data)
                 .unwrap_or_else(|e| e.to_string().into_bytes()),
         )
     }
 
     pub(crate) async fn base64_encode(Path(data): Path<String>) -> impl IntoResponse {
-        ([(CONTENT_TYPE, TEXT_PLAIN.as_ref())], BASE64.encode(data))
+        ([(CONTENT_TYPE, TEXT_PLAIN.as_ref())], BASE64_STANDARD.encode(data))
     }
 }
 

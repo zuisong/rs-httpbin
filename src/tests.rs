@@ -1,8 +1,8 @@
-use ::base64::prelude::BASE64_STANDARD;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use base64::prelude::BASE64_STANDARD;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use tokio::net::TcpListener;
 use tower::ServiceExt;
