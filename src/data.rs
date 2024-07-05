@@ -30,6 +30,8 @@ pub struct Http {
     // todo
     // files
     // form
+    pub form: BTreeMap<String, Vec<String>>,
+    pub files: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Serialize)]

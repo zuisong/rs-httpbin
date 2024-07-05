@@ -35,10 +35,9 @@ use tower_http::{
     ServiceBuilderExt,
 };
 use tracing::debug_span;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod data;
-
 #[cfg(test)]
 mod tests;
 
@@ -124,8 +123,8 @@ fn app() -> Router<()> {
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "DEBUG".into()))
-        .with(tracing_subscriber::fmt::layer().json())
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "DEBUG".into()))
+        .with(layer().json())
         .init();
 
     let router = app();
@@ -285,19 +284,19 @@ mod cookies {
         ErasedJson::pretty(m)
     }
 
-    pub async fn cookies_set(Query(query): Query<BTreeMap<String, String>>) -> impl IntoResponse {
+    pub async fn cookies_set(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
         let mut jar = CookieJar::new();
         for (k, v) in query.iter() {
-            jar = jar.add(cookie::Cookie::new(k.clone(), v.clone()));
+            jar = jar.add(cookie::Cookie::new(k.clone(), v[0].clone()));
         }
         (StatusCode::FOUND, (jar, Redirect::to("/cookies"))).into_response()
     }
 
-    pub async fn cookies_del(Query(query): Query<BTreeMap<String, String>>) -> impl IntoResponse {
+    pub async fn cookies_del(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
         let mut jar = CookieJar::new();
-        for (k, v) in query.iter() {
+        for (k, v) in query.into_iter() {
             jar = jar.add(
-                cookie::Cookie::build((k.clone(), v.clone()))
+                cookie::Cookie::build((k.clone(), v[0].clone()))
                     .max_age(time::Duration::ZERO)
                     .expires(time::OffsetDateTime::now_utc())
                     .http_only(true)
@@ -319,18 +318,61 @@ async fn anything(
 ) -> Response {
     let headers = get_headers(&header_map);
 
-    let body_string = match String::from_utf8(body.to_vec()) {
-        Ok(body) => body,
+    let body_string = match std::str::from_utf8(&body) {
+        Ok(body) => body.into(),
         Err(_) => BASE64_STANDARD.encode(&body),
     };
 
-    let json = content_type.and_then(|TypedHeader(content_type)| {
-        if content_type == ContentType::json() {
-            serde_json::from_slice(&body).ok()
-        } else {
-            None
+    let mut json = None;
+    let mut form: BTreeMap<String, Vec<String>> = Default::default();
+    let mut files: BTreeMap<String, Vec<String>> = Default::default();
+    if let Some(TypedHeader(c)) = content_type {
+        let mime: mime::Mime = c.into();
+        match (mime.type_(), mime.subtype()) {
+            (mime::APPLICATION, mime::JSON) => {
+                json = serde_json::from_slice(&body).ok();
+            }
+            (mime::APPLICATION, mime::WWW_FORM_URLENCODED) => {
+                let f: Vec<(String, String)> = serde_urlencoded::from_bytes(body.as_ref()).unwrap();
+                for (k, v) in f {
+                    form.entry(k).or_default().push(v);
+                }
+            }
+            (mime::MULTIPART, mime::FORM_DATA) => {
+                let content_type = headers
+                    .get(CONTENT_TYPE.as_str())
+                    .and_then(|it| it.first())
+                    .map(|s| s.as_str())
+                    .unwrap_or_default();
+                let boundary = multer::parse_boundary(content_type).ok();
+                if let Some(boundary) = boundary {
+                    let mut m = multer::Multipart::new(Body::from(body).into_data_stream(), boundary);
+                    println!("{:?}", m);
+
+                    while let Some((_idx, field)) = m.next_field_with_idx().await.unwrap() {
+                        match (field.file_name(), field.name()) {
+                            (None, Some(name)) => form
+                                .entry(name.to_string())
+                                .or_default()
+                                .push(field.text().await.unwrap_or_default()),
+                            (Some(_f), Some(name)) => {
+                                let vec = files.entry(name.into()).or_default();
+                                let field_val = field.bytes().await.unwrap();
+                                let string = match std::str::from_utf8(&field_val) {
+                                    Ok(body) => body.into(),
+                                    Err(_) => BASE64_STANDARD.encode(&field_val),
+                                };
+                                vec.push(string);
+                            }
+                            (_, _) => todo!(),
+                        }
+                    }
+                }
+            }
+
+            (_, _) => {}
         }
-    });
+    }
 
     ErasedJson::pretty(data::Http {
         method: method.to_string(),
@@ -340,6 +382,8 @@ async fn anything(
         args: query,
         data: body_string,
         json,
+        form,
+        files,
     })
     .into_response()
 }
@@ -382,8 +426,15 @@ async fn utf8() -> impl IntoResponse {
     Html(include_str!("../assets/utf8.html"))
 }
 
+#[derive(Deserialize, Serialize, Default)]
+struct Uuid {
+    uuid: String,
+}
+
 async fn uuid() -> impl IntoResponse {
-    ErasedJson::pretty(json!( { "uuid" : uuid::Uuid::new_v4().to_string(), }))
+    ErasedJson::pretty(Uuid {
+        uuid: uuid::Uuid::new_v4().to_string(),
+    })
 }
 
 async fn response_headers(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
@@ -478,8 +529,8 @@ mod redirect {
     pub(crate) async fn redirect(Path(n): Path<i32>) -> Response {
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
-            1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
-            2.. => (StatusCode::FOUND, [(LOCATION, format!("/redirect/{}", n - 1))]).into_response(),
+            1 => (StatusCode::FOUND, Redirect::to("/get")).into_response(),
+            2.. => (StatusCode::FOUND, Redirect::to(&format!("/redirect/{}", n - 1))).into_response(),
         }
     }
 
@@ -494,7 +545,7 @@ mod redirect {
     pub(crate) async fn relative_redirect(Path(n): Path<i32>) -> Response {
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
-            1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
+            1 => (StatusCode::FOUND, Redirect::to("/get")).into_response(),
             2.. => (StatusCode::FOUND, [(LOCATION, format!("./{}", n - 1))]).into_response(),
         }
     }
@@ -502,20 +553,15 @@ mod redirect {
     pub(crate) async fn absolute_redirect(Path(n): Path<i32>, uri: Uri, Host(host): Host, _req: Request) -> Response {
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
-            1 => (StatusCode::FOUND, [(LOCATION, "/get")]).into_response(),
-            2.. => (
-                StatusCode::FOUND,
-                [(
-                    LOCATION,
-                    format!(
-                        "{}://{}/absolute-redirect/{}",
-                        uri.scheme_str().unwrap_or("http"),
-                        host,
-                        n - 1
-                    ),
-                )],
-            )
-                .into_response(),
+            1 => (StatusCode::FOUND, Redirect::to("/get")).into_response(),
+            2.. => {
+                let schema = uri.scheme_str().unwrap_or("http");
+                (
+                    StatusCode::FOUND,
+                    Redirect::to(&format!("{schema}://{host}/absolute-redirect/{}", n - 1)),
+                )
+                    .into_response()
+            }
         }
     }
 
@@ -535,7 +581,7 @@ mod redirect {
                 .ok()
                 .filter(StatusCode::is_redirection)
                 .unwrap_or(StatusCode::FOUND),
-            [(LOCATION, url)],
+            Redirect::to(&url),
         )
             .into_response()
     }
@@ -632,7 +678,7 @@ r#"
             {% endfor %}
             </body>
         </html>
-"#},
+    "#},
                 minijinja::context! {total, cur},
             )
             .unwrap();

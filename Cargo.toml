@@ -4,9 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-markdown = { version = "1.0.0-alpha.17" }
+markdown = { version = "1.0.0-alpha.18" }
 serde = { version = "1", features = ["derive"] }
-serde_json = { version = "1" }
+serde_json = { version = "1", default-features = false }
 tokio = { version = "~1", features = ["rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing = "0.1"
@@ -14,20 +14,20 @@ mime = "0.3"
 axum-client-ip = "0.6"
 base64 = "~0.21"
 humantime-serde = "1"
-hostname = "0.4.0"
-tokio-stream = { version = "0.1.15", features = ["time"], default-features = false }
-time = { version = "0.3.36", default-features = false }
-minijinja = "2.0.2"
-indoc = "2.0.5"
-fastrand = "2.1.0"
-axum_garde = { version = "0.19.2", features = ["axum-extra-query"] }
-garde = { version = "0.19.2", features = ["derive"] }
-tower = "0.4.13"
+hostname = "0.4"
+tokio-stream = { version = "0.1", features = ["time"], default-features = false }
+time = { version = "0.3", default-features = false }
+minijinja = "2"
+indoc = "2"
+fastrand = "2"
+axum_garde = { version = "0.19", features = ["axum-extra-query"] }
+garde = { version = "0.19", features = ["derive"] }
+tower = "0.4"
+multer = { version = "3", default-features= false  }
+serde_urlencoded = "0.7.1"
 
 [dependencies.axum]
-
-
-version = "0.7.5"
+version = "0.7"
 features = ["http2", "tower-log", "matched-path"]
 default-features = false
 
@@ -52,14 +52,14 @@ features = [
 ]
 
 [dependencies.uuid]
-version = "1.9.0"
+version = "1.9"
 features = ["v4"]
 default-features = false
 
 
 [dev-dependencies]
-http-body-util = "0.1.2"
-hyper-util = { version = "0.1.5", features = ["client-legacy"] }
+http-body-util = "0.1"
+hyper-util = { version = "0.1", features = ["client-legacy"] }
 test-case = "3"
 
 [profile.release]
