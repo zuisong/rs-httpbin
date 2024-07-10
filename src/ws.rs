@@ -1,9 +1,9 @@
-use std::{borrow::Cow, net::SocketAddr, ops::ControlFlow, time::Duration};
+use std::{net::SocketAddr, ops::ControlFlow, time::Duration};
 
 use axum::{
     extract::{
         connect_info::ConnectInfo,
-        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade},
+        ws::{Message, WebSocket, WebSocketUpgrade},
     },
     http::StatusCode,
     response::IntoResponse,
@@ -23,7 +23,7 @@ pub async fn ws_handler(ws: Option<WebSocketUpgrade>, ConnectInfo(addr): Connect
                 "error": "Bad Request",
                 "detail": "missing required `Upgrade: websocket` header"
             }
-                        )),
+            )),
         )
             .into_response(),
     }
@@ -32,37 +32,31 @@ pub async fn ws_handler(ws: Option<WebSocketUpgrade>, ConnectInfo(addr): Connect
 async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
     loop {
         tokio::select! {
-            _= tokio::time::sleep(Duration::from_secs(10)) =>{
-                if let Err(e) = socket
-                    .send(Message::Close(Some(CloseFrame {
-                        code: axum::extract::ws::close_code::NORMAL,
-                        reason: Cow::from("Goodbye cc"),
-                    })))
-                    .await
-                {
-                    info!("Could not send Close due to {e}, probably it is ok?");
-                }else{
-                    info!("Close sent to {who}")
-                }
-                break
+          _= tokio::time::sleep(Duration::from_secs(10)) => {
+            if let Err(e) = socket.send(Message::Close(None)).await {
+              info!("Could not send Close due to {e}, probably it is ok?");
+            } else {
+              info!("Close sent to {who}")
             }
-            msg = socket.recv() => {
-                if let Some(Ok(msg)) = msg {
-                    match process_message(msg, who) {
-                        ControlFlow::Break(_) => break,
-                        ControlFlow::Continue(Some(msg)) => {
-                            if socket.send(Message::Text(format!("echo -> {msg}"))).await.is_err() {
-                                info!("client {who} abruptly disconnected");
-                                break;
-                            }
-                        }
-                        ControlFlow::Continue(None) => continue,
-                    }
-                } else {
-                    info!("client {who} abruptly disconnected");
+            break
+          }
+          msg = socket.recv() => {
+            if let Some(Ok(msg)) = msg {
+              match process_message(msg, who) {
+                ControlFlow::Break(_) => break,
+                ControlFlow::Continue(None) => continue,
+                ControlFlow::Continue(Some(msg)) => {
+                  if let  Err(e) =  socket.send(Message::Text(msg)).await {
+                    info!("Could not send msg due to {e}, client {who} abruptly disconnected");
                     break;
+                  }
                 }
+              }
+            } else {
+              info!("client {who} abruptly disconnected");
+              break;
             }
+          }
         }
     }
 
@@ -72,7 +66,8 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
 fn process_message(msg: Message, who: SocketAddr) -> ControlFlow<(), Option<String>> {
     match msg {
         Message::Text(t) => {
-            return ControlFlow::Continue(Some(t));
+            let msg = format!("echo --> {t}");
+            return ControlFlow::Continue(Some(msg));
         }
         Message::Binary(d) => {
             info!(">>> {} sent {} bytes: {:?}", who, d.len(), d);

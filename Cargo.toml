@@ -20,8 +20,8 @@ time = { version = "0.3", default-features = false }
 minijinja = "2"
 indoc = "2"
 fastrand = "2"
-axum_garde = { version = "0.20.0", features = ["axum-extra-query"] }
-garde = { version = "0.20.0", features = ["derive"] }
+axum_garde = { version = "0.20", features = ["axum-extra-query"] }
+garde = { version = "0.20", features = ["derive"] }
 tower = "0.4"
 multer = { version = "3", default-features= false  }
 serde_urlencoded = "0.7.1"
@@ -53,7 +53,7 @@ features = [
 ]
 
 [dependencies.uuid]
-version = "1.9"
+version = "1.10"
 features = ["v4"]
 default-features = false
 
