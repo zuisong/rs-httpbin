@@ -46,9 +46,7 @@ pub mod ext {
 }
 #[tokio::test]
 async fn index() {
-    let app = app();
-
-    let response = app
+    let response = app()
         .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -67,15 +65,8 @@ async fn index() {
 #[test_case::test_case("avif")]
 #[tokio::test]
 async fn image_type(type_: &'static str) {
-    let app = app();
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri(format!("/image/{type_}"))
-                .body(Body::empty())
-                .unwrap(),
-        )
+    let response = app()
+        .oneshot(Request::builder().uri(format!("/image/{type_}")).body(Body::empty()).unwrap())
         .await
         .unwrap();
 
@@ -91,16 +82,8 @@ async fn image_type(type_: &'static str) {
 #[test_case::test_case("./assets/forms_post.html", "/forms/post")]
 #[tokio::test]
 pub async fn data(body_file: &str, path: &str) {
-    let app = app();
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method(Method::GET)
-                .uri(path)
-                .body(Body::empty())
-                .unwrap(),
-        )
+    let response = app()
+        .oneshot(Request::builder().method(Method::GET).uri(path).body(Body::empty()).unwrap())
         .await
         .unwrap();
 
@@ -112,9 +95,7 @@ pub async fn data(body_file: &str, path: &str) {
 
 #[tokio::test]
 async fn not_found() {
-    let app = app();
-
-    let response = app
+    let response = app()
         .oneshot(Request::builder().uri("/does-not-exist").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -138,12 +119,7 @@ async fn the_real_deal() {
     let client = Client::builder(TokioExecutor::new()).build_http();
 
     let response = client
-        .request(
-            Request::builder()
-                .uri(format!("http://{addr}/ip"))
-                .body(Body::empty())
-                .unwrap(),
-        )
+        .request(Request::builder().uri(format!("http://{addr}/ip")).body(Body::empty()).unwrap())
         .await
         .unwrap();
 
@@ -158,10 +134,7 @@ async fn the_real_deal() {
 
 #[tokio::test]
 async fn basic_auth() {
-    let app = app();
-
-    let response = app
-        .clone()
+    let response = app()
         .oneshot(Request::builder().uri("/basic-auth/a/b").body(Body::empty()).unwrap())
         .await
         .unwrap();
@@ -175,15 +148,11 @@ async fn basic_auth() {
         })
     );
 
-    let response = app
-        .clone()
+    let response = app()
         .oneshot(
             Request::builder()
                 .uri("/basic-auth/a/b")
-                .header(
-                    "Authorization",
-                    format!("Basic {}", BASE64_STANDARD.encode("a1:a").as_str()),
-                )
+                .header("Authorization", format!("Basic {}", BASE64_STANDARD.encode("a1:a").as_str()))
                 .body(Body::empty())
                 .unwrap(),
         )
@@ -199,15 +168,11 @@ async fn basic_auth() {
         })
     );
 
-    let response = app
-        .clone()
+    let response = app()
         .oneshot(
             Request::builder()
                 .uri("/basic-auth/a/b")
-                .header(
-                    "Authorization",
-                    format!("Basic {}", BASE64_STANDARD.encode("a:b").as_str()),
-                )
+                .header("Authorization", format!("Basic {}", BASE64_STANDARD.encode("a:b").as_str()))
                 .body(Body::empty())
                 .unwrap(),
         )

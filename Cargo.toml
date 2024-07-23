@@ -1,7 +1,8 @@
+cargo-features = ["edition2024"]
 [package]
 name = "rs-httpbin"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 markdown = { version = "1.0.0-alpha.18" }
@@ -23,7 +24,7 @@ fastrand = "2"
 axum_garde = { version = "0.20", features = ["axum-extra-query"] }
 garde = { version = "0.20", features = ["derive"] }
 tower = "0.4"
-multer = { version = "3", default-features= false  }
+multer = { version = "3", default-features = false }
 serde_urlencoded = "0.7.1"
 futures-util = "0.3.30"
 

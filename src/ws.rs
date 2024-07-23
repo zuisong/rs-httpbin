@@ -3,7 +3,7 @@ use std::{net::SocketAddr, ops::ControlFlow, time::Duration};
 use axum::{
     extract::{
         connect_info::ConnectInfo,
-        ws::{Message, WebSocket, WebSocketUpgrade},
+        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade},
     },
     http::StatusCode,
     response::IntoResponse,
@@ -73,13 +73,10 @@ fn process_message(msg: Message, who: SocketAddr) -> ControlFlow<(), Option<Stri
             info!(">>> {} sent {} bytes: {:?}", who, d.len(), d);
         }
         Message::Close(c) => {
-            if let Some(cf) = c {
-                info!(
-                    ">>> {} sent close with code {} and reason `{}`",
-                    who, cf.code, cf.reason
-                );
+            if let Some(CloseFrame { code, reason }) = c {
+                info!(">>> {who} sent close with code {code} and reason `{reason}`");
             } else {
-                info!(">>> {who} somehow sent close message without CloseFrame");
+                info!(">>> {who} somehow sent close message without CloseFrame")
             }
             return ControlFlow::Break(());
         }

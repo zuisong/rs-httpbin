@@ -25,15 +25,12 @@ use axum_extra::{
 use axum_garde::WithValidation;
 use base64::{prelude::BASE64_STANDARD, Engine};
 use garde::Validate;
-use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_XML};
+use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_PLAIN_UTF_8, TEXT_XML};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tokio_stream::StreamExt;
 use tower::ServiceBuilder;
-use tower_http::{
-    cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer,
-    ServiceBuilderExt,
-};
+use tower_http::{cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer, ServiceBuilderExt};
 use tracing::debug_span;
 use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
@@ -113,10 +110,7 @@ fn app() -> Router<()> {
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
             format!("/{format}").as_str(),
-            get(anything).layer(SetRequestHeaderLayer::overriding(
-                ACCEPT_ENCODING,
-                HeaderValue::from_static(format),
-            )),
+            get(anything).layer(SetRequestHeaderLayer::overriding(ACCEPT_ENCODING, HeaderValue::from_static(format))),
         );
     }
 
@@ -146,9 +140,7 @@ async fn main() {
 
     let app = router.layer(service);
 
-    let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 3000))
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 3000)).await.unwrap();
     eprintln!("Listening on http://{}", listener.local_addr().unwrap());
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
         .await
@@ -225,10 +217,7 @@ mod basic_auth {
         } else {
             (
                 StatusCode::UNAUTHORIZED,
-                [(
-                    WWW_AUTHENTICATE,
-                    HeaderValue::from_static(r#"Basic realm="Fake Realm""#),
-                )],
+                [(WWW_AUTHENTICATE, HeaderValue::from_static(r#"Basic realm="Fake Realm""#))],
                 body,
             )
                 .into_response()
@@ -289,17 +278,17 @@ mod cookies {
 
     pub async fn cookies_set(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
         let mut jar = CookieJar::new();
-        for (k, v) in query.iter() {
-            jar = jar.add(cookie::Cookie::new(k.clone(), v[0].clone()));
+        for (k, v) in query {
+            jar = jar.add(cookie::Cookie::new(k, v.into_iter().next().unwrap_or_default()));
         }
         (StatusCode::FOUND, (jar, Redirect::to("/cookies"))).into_response()
     }
 
     pub async fn cookies_del(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
         let mut jar = CookieJar::new();
-        for (k, v) in query.into_iter() {
+        for (k, v) in query {
             jar = jar.add(
-                cookie::Cookie::build((k.clone(), v[0].clone()))
+                cookie::Cookie::build((k, v.into_iter().next().unwrap_or_default()))
                     .max_age(time::Duration::ZERO)
                     .expires(time::OffsetDateTime::now_utc())
                     .http_only(true)
@@ -332,11 +321,9 @@ async fn anything(
     if let Some(TypedHeader(c)) = content_type {
         let mime: mime::Mime = c.into();
         match (mime.type_(), mime.subtype()) {
-            (mime::APPLICATION, mime::JSON) => {
-                json = serde_json::from_slice(&body).ok();
-            }
+            (mime::APPLICATION, mime::JSON) => json = serde_json::from_slice(&body).ok(),
             (mime::APPLICATION, mime::WWW_FORM_URLENCODED) => {
-                let f: Vec<(String, String)> = serde_urlencoded::from_bytes(body.as_ref()).unwrap();
+                let f: Vec<(String, String)> = serde_urlencoded::from_bytes(body.as_ref()).unwrap_or_default();
                 for (k, v) in f {
                     form.entry(k).or_default().push(v);
                 }
@@ -352,7 +339,7 @@ async fn anything(
                     let mut m = multer::Multipart::new(Body::from(body).into_data_stream(), boundary);
                     println!("{:?}", m);
 
-                    while let Some((_idx, field)) = m.next_field_with_idx().await.unwrap() {
+                    while let Some((_idx, field)) = m.next_field_with_idx().await.unwrap_or_default() {
                         match (field.file_name(), field.name()) {
                             (None, Some(name)) => form
                                 .entry(name.to_string())
@@ -360,7 +347,7 @@ async fn anything(
                                 .push(field.text().await.unwrap_or_default()),
                             (Some(_f), Some(name)) => {
                                 let vec = files.entry(name.into()).or_default();
-                                let field_val = field.bytes().await.unwrap();
+                                let field_val = field.bytes().await.unwrap_or_default();
                                 let string = match std::str::from_utf8(&field_val) {
                                     Ok(body) => body.into(),
                                     Err(_) => BASE64_STANDARD.encode(&field_val),
@@ -372,7 +359,6 @@ async fn anything(
                     }
                 }
             }
-
             (_, _) => {}
         }
     }
@@ -394,7 +380,7 @@ async fn anything(
 async fn index() -> Html<String> {
     let md = include_str!("../README.md");
     Html(
-        markdown::to_html_with_options(md, &markdown::Options::gfm()).unwrap()
+        markdown::to_html_with_options(md, &markdown::Options::gfm()).unwrap_or_default()
             // language=html
             + (r#"
 <style>
@@ -455,71 +441,71 @@ async fn response_headers(Query(query): Query<BTreeMap<String, Vec<String>>>) ->
 }
 
 async fn robots_txt() -> impl IntoResponse {
-    (
-        [(CONTENT_TYPE, HeaderValue::from_static(mime::TEXT_PLAIN_UTF_8.as_ref()))],
-        include_str!("../assets/robots.txt"),
-    )
+    into_response(TEXT_PLAIN_UTF_8, include_str!("../assets/robots.txt"))
+}
+
+#[inline]
+fn into_response(content_type: impl AsRef<str>, body: impl IntoResponse) -> Response {
+    ([(CONTENT_TYPE, content_type.as_ref())], body).into_response()
 }
 
 mod resp_data {
     use super::*;
-
-    macro_rules! define_data_response {
-        ($name:ident, $path:expr, $content_type:expr) => {
-            pub(crate) async fn $name() -> impl IntoResponse {
-                let body = include_str!($path);
-                ([(CONTENT_TYPE, $content_type)], body)
-            }
-        };
+    pub(crate) async fn json() -> impl IntoResponse {
+        into_response(APPLICATION_JSON, include_str!("../assets/sample.json"))
     }
-
-    define_data_response!(json, "../assets/sample.json", APPLICATION_JSON.essence_str());
-    define_data_response!(xml, "../assets/sample.xml", TEXT_XML.essence_str());
-    define_data_response!(html, "../assets/sample.html", TEXT_HTML_UTF_8.essence_str());
-    define_data_response!(forms_post, "../assets/forms_post.html", TEXT_HTML_UTF_8.essence_str());
+    pub(crate) async fn xml() -> impl IntoResponse {
+        into_response(TEXT_XML, include_str!("../assets/sample.xml"))
+    }
+    pub(crate) async fn html() -> impl IntoResponse {
+        into_response(TEXT_HTML_UTF_8, include_str!("../assets/sample.html"))
+    }
+    pub(crate) async fn forms_post() -> impl IntoResponse {
+        into_response(TEXT_HTML_UTF_8, include_str!("../assets/forms_post.html"))
+    }
 }
 
 mod image {
     use super::*;
 
     pub(crate) async fn image(headers: HeaderMap) -> impl IntoResponse {
-        let mime = headers
-            .get(ACCEPT)
-            .and_then(|v| v.to_str().ok())
-            .map(mime::MimeIter::new);
+        let mime = headers.get(ACCEPT).and_then(|v| v.to_str().ok()).map(mime::MimeIter::new);
 
         if let Some(mime) = mime {
             for m in mime.filter_map(|m| m.ok()).filter(|it| it.type_() == IMAGE) {
-                match m.subtype().as_str() {
-                    "jpeg" => return jpeg().await,
-                    "svg" => return svg().await,
-                    "png" => return png().await,
-                    "webp" => return webp().await,
-                    "avif" => return avif().await,
-                    "jxl" => return jxl().await,
+                return match m.subtype().as_str() {
+                    "jpeg" => jpeg().await,
+                    "svg" => svg().await,
+                    "png" => png().await,
+                    "webp" => webp().await,
+                    "avif" => avif().await,
+                    "jxl" => jxl().await,
                     _ => continue,
-                }
+                };
             }
         }
 
         StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response()
     }
 
-    macro_rules! define_image_response {
-        ($name:ident, $path:expr, $content_type:expr) => {
-            pub(crate) async fn $name() -> Response {
-                let bytes = include_bytes!($path);
-                ([(CONTENT_TYPE, $content_type)], bytes).into_response()
-            }
-        };
+    pub(crate) async fn jpeg() -> Response {
+        into_response("image/jpeg", include_bytes!("../assets/jpeg.jpeg"))
     }
-
-    define_image_response!(jpeg, "../assets/jpeg.jpeg", "image/jpeg");
-    define_image_response!(svg, "../assets/svg.svg", "image/svg");
-    define_image_response!(png, "../assets/png.png", "image/png");
-    define_image_response!(webp, "../assets/webp.webp", "image/webp");
-    define_image_response!(jxl, "../assets/jxl.jxl", "image/jxl");
-    define_image_response!(avif, "../assets/avif.avif", "image/avif");
+    pub(crate) async fn svg() -> Response {
+        into_response("image/svg", include_bytes!("../assets/svg.svg"))
+    }
+    pub(crate) async fn png() -> Response {
+        into_response("image/png", include_bytes!("../assets/png.png"))
+    }
+    pub(crate) async fn webp() -> Response {
+        into_response("image/webp", include_bytes!("../assets/webp.webp"))
+    }
+    pub(crate) async fn jxl() -> Response {
+        into_response("image/jxl", include_bytes!("../assets/jxl.jxl"))
+    }
+    pub(crate) async fn avif() -> Response {
+        into_response("image/avif", include_bytes!("../assets/avif.avif"))
+    }
 }
 
 async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
@@ -596,9 +582,7 @@ mod base_64 {
     pub(crate) async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
         (
             [(CONTENT_TYPE, TEXT_PLAIN.as_ref())],
-            BASE64_STANDARD
-                .decode(base64_data)
-                .unwrap_or_else(|e| e.to_string().into_bytes()),
+            BASE64_STANDARD.decode(base64_data).unwrap_or_else(|e| e.to_string().into_bytes()),
         )
     }
 
@@ -652,10 +636,11 @@ mod links {
     pub async fn links(WithValidation(p): WithValidation<Path<LinksParam>>) -> Response {
         let LinksParam { total, page } = p.into_inner();
 
-        if page.is_none() {
-            return Redirect::to(format!("/links/{}/0", total).as_str()).into_response();
-        }
-        let cur = page.unwrap();
+        let cur = match page {
+            None => return Redirect::to(format!("/links/{total}/0").as_str()).into_response(),
+            Some(cur) => cur,
+        };
+
         tracing::info!(cur, total);
 
         let mut env = minijinja::Environment::new();
@@ -684,7 +669,7 @@ r#"
     "#},
                 minijinja::context! {total, cur},
             )
-            .unwrap();
+            .unwrap_or_default();
         Html(html).into_response()
     }
 }
