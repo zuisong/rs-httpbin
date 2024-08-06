@@ -36,3 +36,21 @@ pub struct SseData {
     pub id: i32,
     pub timestamp: u128,
 }
+
+#[derive(Serialize, Debug)]
+pub struct ErrorDetail {
+    status_code: i32,
+    error: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
+    detail: String,
+}
+
+impl ErrorDetail {
+    pub fn new(status_code: i32, error: impl ToString, detail: impl ToString) -> Self {
+        ErrorDetail {
+            status_code,
+            error: error.to_string(),
+            detail: detail.to_string(),
+        }
+    }
+}

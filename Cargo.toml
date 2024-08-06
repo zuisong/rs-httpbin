@@ -1,8 +1,7 @@
-cargo-features = ["edition2024"]
 [package]
 name = "rs-httpbin"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 markdown = { version = "1.0.0-alpha.18" }

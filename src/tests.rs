@@ -6,6 +6,7 @@ use base64::prelude::BASE64_STANDARD;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use tokio::net::TcpListener;
 use tower::ServiceExt;
+use serde_json::json;
 
 use super::*;
 use crate::tests::ext::BodyExt as _;

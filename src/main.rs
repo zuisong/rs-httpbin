@@ -18,7 +18,10 @@ use axum::{
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
     extract::{cookie, CookieJar, Query},
-    headers::{authorization::Basic, Authorization, ContentType, UserAgent},
+    headers::{
+        authorization::{Basic, Bearer},
+        Authorization, ContentType, HeaderMapExt, UserAgent,
+    },
     response::ErasedJson,
     TypedHeader,
 };
@@ -27,7 +30,6 @@ use base64::{prelude::BASE64_STANDARD, Engine};
 use garde::Validate;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_PLAIN_UTF_8, TEXT_XML};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use tokio_stream::StreamExt;
 use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer, ServiceBuilderExt};
@@ -72,6 +74,7 @@ fn app() -> Router<()> {
         .route("/uuid", any(uuid))
         .route("/response-headers", any(response_headers))
         .route("/ip", any(ip))
+        .route("/bearer", any(bearer))
         //
         .route("/image", any(image::image))
         .route("/image/jpeg", any(image::jpeg))
@@ -149,7 +152,7 @@ async fn main() {
 
 async fn user_agent(user_agent: Option<TypedHeader<UserAgent>>) -> impl IntoResponse {
     ErasedJson::pretty(data::UserAgent {
-        user_agent: user_agent.map(|h| h.0.to_string()).unwrap_or("".to_string()),
+        user_agent: user_agent.map(|TypedHeader(h)| h.to_string()).unwrap_or_default(),
     })
 }
 
@@ -166,17 +169,20 @@ struct UnstableQueryParam {
 }
 
 async fn unstable(WithValidation(query): WithValidation<Query<UnstableQueryParam>>) -> Response {
-    let failure_rate = query.failure_rate.unwrap_or(0.5);
-    if !matches!(failure_rate, 0.0..=1.0) {
-        return ErasedJson::pretty(json!(
-        {
-            "status_code": 400,
-            "error": "Bad Request",
-            "detail": "invalid failure rate: %!d(<nil>) not in range [0, 1]"
+    let failure_rate = match query.failure_rate {
+        Some(failure_rate @ 0.0..=1.0) => failure_rate,
+        _ => {
+            return ErasedJson::pretty(data::ErrorDetail::new(
+                400,
+                "Bad Request",
+                format!(
+                    "invalid failure rate: {} not in range [0, 1]",
+                    query.failure_rate.map_or("None".to_string(), |it| f32::to_string(&it))
+                ),
+            ))
+            .into_response()
         }
-                ))
-        .into_response();
-    }
+    };
 
     if fastrand::f32() <= failure_rate {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
@@ -245,12 +251,7 @@ mod basic_auth {
         } else {
             (
                 StatusCode::NOT_FOUND,
-                ErasedJson::pretty(json!(
-                    {
-                        "status_code": 404,
-                        "error": "Not Found"
-                    }
-                )),
+                ErasedJson::pretty(data::ErrorDetail::new(404, "Not Found", "")),
             )
                 .into_response()
         }
@@ -381,8 +382,8 @@ async fn index() -> Html<String> {
     let md = include_str!("../README.md");
     Html(
         markdown::to_html_with_options(md, &markdown::Options::gfm()).unwrap_or_default()
-            // language=html
-            + (r#"
+      // language=html
+      + (r#"
 <style>
   @media (prefers-color-scheme: dark) {
     html, img, video, iframe {
@@ -512,6 +513,25 @@ async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
     ErasedJson::pretty(data::Ip { origin }).into_response()
 }
 
+#[derive(Serialize, Deserialize)]
+struct BearerAuth {
+    pub authorized: bool,
+    pub token: String,
+}
+
+async fn bearer(header_map: HeaderMap) -> impl IntoResponse {
+    let authorization = header_map.typed_get::<Authorization<Bearer>>();
+
+    match authorization {
+        None => ErasedJson::pretty(data::ErrorDetail::new(401, "Unauthorized", "")).into_response(),
+        Some(token) => ErasedJson::pretty(BearerAuth {
+            authorized: true,
+            token: token.token().to_string(),
+        })
+        .into_response(),
+    }
+}
+
 mod redirect {
     use super::*;
 
@@ -524,11 +544,7 @@ mod redirect {
     }
 
     fn bad_redirect_request() -> ErasedJson {
-        ErasedJson::pretty(json!({
-            "status_code": 400,
-            "error": "Bad Request",
-            "detail": "redirect count must be > 0"
-        }))
+        ErasedJson::pretty(data::ErrorDetail::new(400, "Bad Request", "redirect count must be > 0".to_string()))
     }
 
     pub(crate) async fn relative_redirect(Path(n): Path<i32>) -> Response {

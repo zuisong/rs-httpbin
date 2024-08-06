@@ -21,7 +21,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/base64/decode/:value](/base64/decode/aGVsbG8K) Explicit URL for decoding a Base64 encoded string.
 - [x] [/base64/encode/:value](/base64/encode/hello) Encodes a string into URL-safe Base64.
 - [x] [/basic-auth/:user/:passwd](/basic-auth/user/passwd) Challenges HTTPBasic Auth.
-- [ ] /bearer Checks Bearer token header - returns 401 if not set.
+- [x] [/bearer](/bearer) Checks Bearer token header - returns 401 if not set.
 - [x] [/br](/br) Returns brotli-encoded data.
 - [ ] /bytes/:n Generates n random bytes of binary data, accepts optional seed integer parameter.
 - [ ] /cache Returns 200 unless an If-Modified-Since or If-None-Match header is provided, when it returns a 304.
