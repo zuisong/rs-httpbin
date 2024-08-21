@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-markdown = { version = "1.0.0-alpha.18" }
+markdown = { version = "1.0.0-alpha.20" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", default-features = false }
 tokio = { version = "~1", features = ["rt-multi-thread"] }

@@ -9,7 +9,6 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::response::ErasedJson;
-use serde_json::json;
 use tracing::info;
 
 pub async fn ws_handler(ws: Option<WebSocketUpgrade>, ConnectInfo(addr): ConnectInfo<SocketAddr>) -> impl IntoResponse {
@@ -17,12 +16,10 @@ pub async fn ws_handler(ws: Option<WebSocketUpgrade>, ConnectInfo(addr): Connect
         Some(ws) => ws.on_upgrade(move |socket| handle_socket(socket, addr)),
         None => (
             StatusCode::BAD_REQUEST,
-            ErasedJson::pretty(json!(
-            {
-                "status_code": 400,
-                "error": "Bad Request",
-                "detail": "missing required `Upgrade: websocket` header"
-            }
+            ErasedJson::pretty(crate::data::ErrorDetail::new(
+                400,
+                "Bad Request",
+                "missing required `Upgrade: websocket` header",
             )),
         )
             .into_response(),
