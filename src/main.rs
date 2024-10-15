@@ -8,7 +8,7 @@ use std::{
 
 use axum::{
     body::{Body, Bytes},
-    extract::{Host, MatchedPath, Path, Request},
+    extract::{Host, MatchedPath, Path, Query, Request},
     http::{header::*, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
     middleware,
     response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
@@ -17,7 +17,7 @@ use axum::{
 };
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
-    extract::{cookie, CookieJar, Query},
+    extract::{cookie, CookieJar},
     headers::{
         authorization::{Basic, Bearer},
         Authorization, ContentType, HeaderMapExt, UserAgent,
@@ -35,6 +35,8 @@ use tower::ServiceBuilder;
 use tower_http::{cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer, ServiceBuilderExt};
 use tracing::debug_span;
 use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+
+use crate::data::{Headers, Http, Queries};
 
 mod data;
 mod ws;
@@ -157,9 +159,7 @@ async fn user_agent(user_agent: Option<TypedHeader<UserAgent>>) -> impl IntoResp
 }
 
 async fn headers(header_map: HeaderMap) -> impl IntoResponse {
-    ErasedJson::pretty(data::Headers {
-        headers: get_headers(&header_map),
-    })
+    ErasedJson::pretty(get_headers(&header_map))
 }
 
 #[derive(Debug, Validate, Deserialize)]
@@ -170,6 +170,7 @@ struct UnstableQueryParam {
 
 async fn unstable(WithValidation(query): WithValidation<Query<UnstableQueryParam>>) -> Response {
     let failure_rate = match query.failure_rate {
+        None => 0.5,
         Some(failure_rate @ 0.0..=1.0) => failure_rate,
         _ => {
             return ErasedJson::pretty(data::ErrorDetail::new(
@@ -258,14 +259,15 @@ mod basic_auth {
     }
 }
 
-fn get_headers(header_map: &HeaderMap) -> BTreeMap<String, Vec<String>> {
-    let mut headers: BTreeMap<String, Vec<String>> = BTreeMap::new();
+fn get_headers(header_map: &HeaderMap) -> Headers {
+    let mut headers = Headers::default();
 
     for (k, v) in header_map {
         let v = String::from_utf8_lossy(v.as_bytes()).to_string();
         let values = headers.entry(k.as_str().to_string()).or_default();
         values.push(v);
     }
+
     headers
 }
 
@@ -303,7 +305,7 @@ mod cookies {
 async fn anything(
     method: Method,
     uri: Uri,
-    Query(query): Query<BTreeMap<String, Vec<String>>>,
+    Query(query): Query<Queries>,
     header_map: HeaderMap,
     content_type: Option<TypedHeader<ContentType>>,
     InsecureClientIp(origin): InsecureClientIp,
@@ -316,9 +318,12 @@ async fn anything(
         Err(_) => BASE64_STANDARD.encode(&body),
     };
 
-    let mut json = None;
-    let mut form: BTreeMap<String, Vec<String>> = Default::default();
-    let mut files: BTreeMap<String, Vec<String>> = Default::default();
+    let Http {
+        mut form,
+        mut files,
+        mut json,
+        ..
+    } = Default::default();
     if let Some(TypedHeader(c)) = content_type {
         let mime: mime::Mime = c.into();
         match (mime.type_(), mime.subtype()) {
@@ -331,6 +336,7 @@ async fn anything(
             }
             (mime::MULTIPART, mime::FORM_DATA) => {
                 let content_type = headers
+                    .headers
                     .get(CONTENT_TYPE.as_str())
                     .and_then(|it| it.first())
                     .map(|s| s.as_str())
@@ -364,11 +370,11 @@ async fn anything(
         }
     }
 
-    ErasedJson::pretty(data::Http {
+    ErasedJson::pretty(Http {
         method: method.to_string(),
         uri: uri.to_string(),
         headers,
-        origin,
+        origin: origin.into(),
         args: query,
         data: body_string,
         json,
@@ -613,8 +619,10 @@ mod sse {
     #[derive(Deserialize, Serialize, Default)]
     pub struct SeeParam {
         pub count: Option<usize>,
+        #[serde(default)]
         #[serde(with = "humantime_serde")]
         pub duration: Option<Duration>,
+        #[serde(default)]
         #[serde(with = "humantime_serde")]
         pub delay: Option<Duration>,
     }

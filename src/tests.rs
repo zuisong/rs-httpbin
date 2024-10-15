@@ -189,3 +189,50 @@ async fn basic_auth() {
         })
     );
 }
+
+#[tokio::test]
+async fn anything() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/anything")
+                .method("POST")
+                .header("X-Real-Ip", "1.2.3.4")
+                .header("content-type", ContentType::form_url_encoded().to_string())
+                .body(http_body_util::Full::from("a=1&b=1&b=2&b=1"))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.body_as_json().await;
+    println!("{:#?}", &body);
+    assert_eq!(body["origin"], json!("1.2.3.4"));
+    assert_eq!(body["form"], json!(  {"a":"1", "b":["1","2","1"]}   ));
+    assert_eq!(
+        body,
+        json!(
+        {
+          "args": {},
+          "data": "a=1&b=1&b=2&b=1",
+          "files": {},
+          "form": {
+            "a": "1",
+            "b": [
+              "1",
+              "2",
+              "1"
+            ]
+          },
+          "headers": {
+            "content-type": "application/x-www-form-urlencoded",
+            "x-real-ip": "1.2.3.4"
+          },
+          "json": null,
+          "method": "POST",
+          "origin": "1.2.3.4",
+          "uri": "/anything"
+        }
+            )
+    )
+}
