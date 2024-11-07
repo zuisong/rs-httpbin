@@ -29,10 +29,10 @@ pub struct Headers {
     pub(crate) headers: BTreeMap<String, MyVec<String>>,
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Deref, DerefMut)]
 #[serde(transparent)]
 pub struct Queries {
-    inner: BTreeMap<String, MyVec<String>>,
+    pub inner: BTreeMap<String, MyVec<String>>,
 }
 
 #[derive(Serialize)]

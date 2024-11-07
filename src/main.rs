@@ -1,6 +1,5 @@
 use std::{
     collections::BTreeMap,
-    default::Default,
     net::{Ipv4Addr, SocketAddr},
     str::FromStr,
     time::{Duration, UNIX_EPOCH},
@@ -305,13 +304,20 @@ mod cookies {
 async fn anything(
     method: Method,
     uri: Uri,
-    Query(query): Query<Queries>,
+    Query(query): Query<Vec<(String, String)>>,
     header_map: HeaderMap,
     content_type: Option<TypedHeader<ContentType>>,
     InsecureClientIp(origin): InsecureClientIp,
     body: Bytes,
 ) -> Response {
     let headers = get_headers(&header_map);
+
+    let mut queries = Queries::default();
+    for (k, v) in query {
+        let v = String::from_utf8_lossy(v.as_bytes()).to_string();
+        let values = queries.entry(k.as_str().to_string()).or_default();
+        values.push(v);
+    }
 
     let body_string = match std::str::from_utf8(&body) {
         Ok(body) => body.into(),
@@ -375,7 +381,7 @@ async fn anything(
         uri: uri.to_string(),
         headers,
         origin: origin.into(),
-        args: query,
+        args: queries,
         data: body_string,
         json,
         form,

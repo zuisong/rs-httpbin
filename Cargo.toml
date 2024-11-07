@@ -11,7 +11,7 @@ tokio = { version = "~1", features = ["rt-multi-thread"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "json", "fmt"] }
 tracing = "0.1"
 mime = "0.3"
-axum = { version = "0.7.7", features = ["http2", "tower-log", "matched-path", "ws"] }
+axum = { version = "0.7", features = ["http2", "tower-log", "matched-path", "ws"] }
 axum-extra = { version = "0.9", features = ["typed-header", "erased-json", "query", "cookie", ] }
 axum-client-ip = "0.6"
 base64 = "~0.22"
@@ -27,8 +27,8 @@ garde = { version = "0.20", features = ["derive"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors", "compression-full", "set-header", "request-id", "util", ]  }
 multer = "3"
-serde_urlencoded = "0.7.1"
-uuid = { version = "1.10", features = ["v4"] }
+serde_urlencoded = "0.7"
+uuid = { version = "1.11", features = ["v4"] }
 derive_more = { version = "1.0.0", features = ["deref_mut", "deref"] }
 
 
