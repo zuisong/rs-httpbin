@@ -271,6 +271,7 @@ fn get_headers(header_map: &HeaderMap) -> Headers {
 }
 
 mod cookies {
+    use time::OffsetDateTime;
     use super::*;
 
     pub async fn cookies(jar: CookieJar) -> impl IntoResponse {
@@ -292,7 +293,7 @@ mod cookies {
             jar = jar.add(
                 cookie::Cookie::build((k, v.into_iter().next().unwrap_or_default()))
                     .max_age(time::Duration::ZERO)
-                    .expires(time::OffsetDateTime::now_utc())
+                    .expires(OffsetDateTime::now_utc())
                     .http_only(true)
                     .build(),
             );
@@ -464,16 +465,16 @@ fn into_response(content_type: impl AsRef<str>, body: impl IntoResponse) -> Resp
 
 mod resp_data {
     use super::*;
-    pub(crate) async fn json() -> impl IntoResponse {
+    pub async fn json() -> impl IntoResponse {
         into_response(APPLICATION_JSON, include_str!("../assets/sample.json"))
     }
-    pub(crate) async fn xml() -> impl IntoResponse {
+    pub async fn xml() -> impl IntoResponse {
         into_response(TEXT_XML, include_str!("../assets/sample.xml"))
     }
-    pub(crate) async fn html() -> impl IntoResponse {
+    pub async fn html() -> impl IntoResponse {
         into_response(TEXT_HTML_UTF_8, include_str!("../assets/sample.html"))
     }
-    pub(crate) async fn forms_post() -> impl IntoResponse {
+    pub async fn forms_post() -> impl IntoResponse {
         into_response(TEXT_HTML_UTF_8, include_str!("../assets/forms_post.html"))
     }
 }
@@ -481,7 +482,7 @@ mod resp_data {
 mod image {
     use super::*;
 
-    pub(crate) async fn image(headers: HeaderMap) -> impl IntoResponse {
+    pub async fn image(headers: HeaderMap) -> impl IntoResponse {
         let mime = headers.get(ACCEPT).and_then(|v| v.to_str().ok()).map(mime::MimeIter::new);
 
         if let Some(mime) = mime {
@@ -501,32 +502,32 @@ mod image {
         StatusCode::UNSUPPORTED_MEDIA_TYPE.into_response()
     }
 
-    pub(crate) async fn jpeg() -> Response {
+    pub async fn jpeg() -> Response {
         into_response("image/jpeg", include_bytes!("../assets/jpeg.jpeg"))
     }
-    pub(crate) async fn svg() -> Response {
+    pub async fn svg() -> Response {
         into_response("image/svg", include_bytes!("../assets/svg.svg"))
     }
-    pub(crate) async fn png() -> Response {
+    pub async fn png() -> Response {
         into_response("image/png", include_bytes!("../assets/png.png"))
     }
-    pub(crate) async fn webp() -> Response {
+    pub async fn webp() -> Response {
         into_response("image/webp", include_bytes!("../assets/webp.webp"))
     }
-    pub(crate) async fn jxl() -> Response {
+    pub async fn jxl() -> Response {
         into_response("image/jxl", include_bytes!("../assets/jxl.jxl"))
     }
-    pub(crate) async fn avif() -> Response {
+    pub async fn avif() -> Response {
         into_response("image/avif", include_bytes!("../assets/avif.avif"))
     }
 }
 
 async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
-    ErasedJson::pretty(data::Ip { origin }).into_response()
+    ErasedJson::pretty(data::Ip { origin })
 }
 
 #[derive(Serialize, Deserialize)]
-struct BearerAuth {
+pub struct BearerAuth {
     pub authorized: bool,
     pub token: String,
 }
@@ -545,9 +546,10 @@ async fn bearer(header_map: HeaderMap) -> impl IntoResponse {
 }
 
 mod redirect {
+
     use super::*;
 
-    pub(crate) async fn redirect(Path(n): Path<i32>) -> Response {
+    pub async fn redirect(Path(n): Path<i32>) -> Response {
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
             1 => (StatusCode::FOUND, Redirect::to("/get")).into_response(),
@@ -559,7 +561,7 @@ mod redirect {
         ErasedJson::pretty(data::ErrorDetail::new(400, "Bad Request", "redirect count must be > 0".to_string()))
     }
 
-    pub(crate) async fn relative_redirect(Path(n): Path<i32>) -> Response {
+    pub async fn relative_redirect(Path(n): Path<i32>) -> Response {
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
             1 => (StatusCode::FOUND, Redirect::to("/get")).into_response(),
@@ -567,18 +569,19 @@ mod redirect {
         }
     }
 
-    pub(crate) async fn absolute_redirect(Path(n): Path<i32>, uri: Uri, Host(host): Host, _req: Request) -> Response {
+    pub async fn absolute_redirect(Path(n): Path<i32>, uri: Uri, Host(host): Host, _req: Request) -> Response {
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
             1 => (StatusCode::FOUND, Redirect::to("/get")).into_response(),
-            2.. => {
-                let schema = uri.scheme_str().unwrap_or("http");
-                (
-                    StatusCode::FOUND,
-                    Redirect::to(&format!("{schema}://{host}/absolute-redirect/{}", n - 1)),
-                )
-                    .into_response()
-            }
+            2.. => (
+                StatusCode::FOUND,
+                Redirect::to(&format!(
+                    "{}://{host}/absolute-redirect/{}",
+                    uri.scheme_str().unwrap_or("http"),
+                    n - 1
+                )),
+            )
+                .into_response(),
         }
     }
 
@@ -607,14 +610,14 @@ mod redirect {
 mod base_64 {
     use super::*;
 
-    pub(crate) async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
+    pub async fn base64_decode(Path(base64_data): Path<String>) -> impl IntoResponse {
         (
             [(CONTENT_TYPE, TEXT_PLAIN.as_ref())],
             BASE64_STANDARD.decode(base64_data).unwrap_or_else(|e| e.to_string().into_bytes()),
         )
     }
 
-    pub(crate) async fn base64_encode(Path(data): Path<String>) -> impl IntoResponse {
+    pub async fn base64_encode(Path(data): Path<String>) -> impl IntoResponse {
         ([(CONTENT_TYPE, TEXT_PLAIN.as_ref())], BASE64_STANDARD.encode(data))
     }
 }
@@ -666,9 +669,8 @@ mod links {
     pub async fn links(WithValidation(p): WithValidation<Path<LinksParam>>) -> Response {
         let LinksParam { total, page } = p.into_inner();
 
-        let cur = match page {
-            None => return Redirect::to(format!("/links/{total}/0").as_str()).into_response(),
-            Some(cur) => cur,
+        let Some(cur) = page else {
+            return Redirect::to(format!("/links/{total}/0").as_str()).into_response();
         };
 
         tracing::info!(cur, total);
