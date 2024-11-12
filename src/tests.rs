@@ -236,3 +236,39 @@ async fn anything() {
             )
     )
 }
+#[tokio::test]
+async fn test_anything_multipart() {
+    let body = r#"--AaB03x
+Content-Disposition: form-data; name="a"
+
+1
+--AaB03x
+Content-Disposition: form-data; name="b"; filename="file1.txt"
+Content-Type: text/plain
+
+file1 content
+--AaB03x
+Content-Disposition: form-data; name="c"
+
+3
+--AaB03x--"#.replace("\n", "\r\n");
+    let response = app()
+      .oneshot(
+          Request::builder()
+            .uri("/anything")
+            .method("POST")
+            .header("X-Real-Ip", "1.2.3.4")
+            .header("Content-Type", format!("multipart/form-data; boundary=AaB03x"))
+            .body(http_body_util::Full::from(body))
+            .unwrap(),
+      )
+      .await
+      .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.body_as_json().await;
+    println!("{:#?}", &body);
+    assert_eq!(body["origin"], json!("1.2.3.4"));
+    assert_eq!(body["form"], json!({"a": "1", "c": "3"}));
+    assert_eq!(body["files"]["b"], json!("file1 content"));
+}
+
