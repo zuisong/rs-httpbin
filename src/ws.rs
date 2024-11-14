@@ -9,6 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::response::ErasedJson;
+use tokio_util::either::Either;
 use tracing::info;
 
 pub async fn ws_handler(ws: Option<WebSocketUpgrade>, ConnectInfo(addr): ConnectInfo<SocketAddr>) -> impl IntoResponse {
@@ -28,43 +29,48 @@ pub async fn ws_handler(ws: Option<WebSocketUpgrade>, ConnectInfo(addr): Connect
 
 async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
     loop {
-        tokio::select! {
-          _= tokio::time::sleep(Duration::from_secs(10)) => {
-            if let Err(e) = socket.send(Message::Close(None)).await {
-              info!("Could not send Close due to {e}, probably it is ok?");
-            } else {
-              info!("Close sent to {who}")
+        let res = tokio::select! {
+          _ = tokio::time::sleep(Duration::from_secs(10)) => Either::Left(()),
+          msg = socket.recv() => Either::Right(msg),
+        };
+
+        let msg = match res {
+            Either::Left(_) => {
+                if let Err(e) = socket.send(Message::Close(None)).await {
+                    info!("Could not send Close due to {e}, probably it is ok?");
+                } else {
+                    info!("Close sent to {who}")
+                }
+                break;
             }
-            break
-          }
-          msg = socket.recv() => {
-            if let Some(Ok(msg)) = msg {
-              match process_message(msg, who) {
-                ControlFlow::Break(_) => break,
-                ControlFlow::Continue(None) => continue,
-                ControlFlow::Continue(Some(msg)) => {
-                  if let  Err(e) =  socket.send(Message::Text(msg)).await {
+            Either::Right(msg) => msg,
+        };
+
+        let Some(Ok(msg)) = msg else {
+            info!("client {who} abruptly disconnected");
+            break;
+        };
+
+        match process_message(msg, who) {
+            ControlFlow::Break(_) => break,
+            ControlFlow::Continue(None) => continue,
+            ControlFlow::Continue(Some(msg)) => {
+                if let Err(e) = socket.send(msg).await {
                     info!("Could not send msg due to {e}, client {who} abruptly disconnected");
                     break;
-                  }
                 }
-              }
-            } else {
-              info!("client {who} abruptly disconnected");
-              break;
             }
-          }
         }
     }
 
     info!("Websocket context {who} destroyed");
 }
 
-fn process_message(msg: Message, who: SocketAddr) -> ControlFlow<(), Option<String>> {
+fn process_message(msg: Message, who: SocketAddr) -> ControlFlow<(), Option<Message>> {
     match msg {
         Message::Text(t) => {
             let msg = format!("echo --> {t}");
-            return ControlFlow::Continue(Some(msg));
+            return ControlFlow::Continue(Some(Message::Text(msg)));
         }
         Message::Binary(d) => {
             info!(">>> {} sent {} bytes: {:?}", who, d.len(), d);

@@ -27,6 +27,7 @@ use axum_extra::{
 use axum_garde::WithValidation;
 use base64::{prelude::BASE64_STANDARD, Engine};
 use garde::Validate;
+use indoc::indoc;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_PLAIN_UTF_8, TEXT_XML};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
@@ -272,6 +273,7 @@ fn get_headers(header_map: &HeaderMap) -> Headers {
 
 mod cookies {
     use time::OffsetDateTime;
+
     use super::*;
 
     pub async fn cookies(jar: CookieJar) -> impl IntoResponse {
@@ -369,7 +371,7 @@ async fn anything(
                                 };
                                 vec.push(string);
                             }
-                            (_, _) => {},
+                            (_, _) => {}
                         }
                     }
                 }
@@ -397,7 +399,7 @@ async fn index() -> Html<String> {
     Html(
         markdown::to_html_with_options(md, &markdown::Options::gfm()).unwrap_or_default()
       // language=html
-      + (r#"
+      + indoc!(r#"
 <style>
   @media (prefers-color-scheme: dark) {
     html, img, video, iframe {

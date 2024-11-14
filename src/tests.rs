@@ -3,6 +3,7 @@ use axum::{
     http::{Request, StatusCode},
 };
 use base64::prelude::BASE64_STANDARD;
+use http_body_util::Full;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use serde_json::json;
 use tokio::net::TcpListener;
@@ -251,19 +252,20 @@ file1 content
 Content-Disposition: form-data; name="c"
 
 3
---AaB03x--"#.replace("\n", "\r\n");
+--AaB03x--"#
+        .replace("\n", "\r\n");
     let response = app()
-      .oneshot(
-          Request::builder()
-            .uri("/anything")
-            .method("POST")
-            .header("X-Real-Ip", "1.2.3.4")
-            .header("Content-Type", format!("multipart/form-data; boundary=AaB03x"))
-            .body(http_body_util::Full::from(body))
-            .unwrap(),
-      )
-      .await
-      .unwrap();
+        .oneshot(
+            Request::builder()
+                .uri("/anything")
+                .method("POST")
+                .header("X-Real-Ip", "1.2.3.4")
+                .header("Content-Type", format!("multipart/form-data; boundary=AaB03x"))
+                .body(http_body_util::Full::from(body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let body = response.body_as_json().await;
     println!("{:#?}", &body);
@@ -272,3 +274,21 @@ Content-Disposition: form-data; name="c"
     assert_eq!(body["files"]["b"], json!("file1 content"));
 }
 
+#[tokio::test]
+async fn test_zstd() {
+    let body = r#"{"a":1}"#.replace("\n", "\r\n");
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/zstd")
+                .method("GET")
+                .header("X-Real-Ip", "1.2.3.4")
+                .header("Content-Type", "application/json")
+                .body(Full::from(""))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    // assert_eq!(response.status(), StatusCode::OK);
+    println!("{}", response.body_as_string().await);
+}
