@@ -3,7 +3,6 @@ use axum::{
     http::{Request, StatusCode},
 };
 use base64::prelude::BASE64_STANDARD;
-use http_body_util::Full;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use serde_json::json;
 use tokio::net::TcpListener;
@@ -239,28 +238,29 @@ async fn anything() {
 }
 #[tokio::test]
 async fn test_anything_multipart() {
-    let body = r#"--AaB03x
+    let boundary = "AaB03x";
+    let body = format! {r#"--{boundary}
 Content-Disposition: form-data; name="a"
 
 1
---AaB03x
+--{boundary}
 Content-Disposition: form-data; name="b"; filename="file1.txt"
 Content-Type: text/plain
 
 file1 content
---AaB03x
+--{boundary}
 Content-Disposition: form-data; name="c"
 
 3
---AaB03x--"#
-        .replace("\n", "\r\n");
+--{boundary}--"#}
+    .replace("\n", "\r\n");
     let response = app()
         .oneshot(
             Request::builder()
                 .uri("/anything")
                 .method("POST")
                 .header("X-Real-Ip", "1.2.3.4")
-                .header("Content-Type", format!("multipart/form-data; boundary=AaB03x"))
+                .header("Content-Type", format!(r#"multipart/form-data; boundary={boundary}"#))
                 .body(http_body_util::Full::from(body))
                 .unwrap(),
         )
@@ -276,7 +276,6 @@ Content-Disposition: form-data; name="c"
 
 #[tokio::test]
 async fn test_zstd() {
-    let body = r#"{"a":1}"#.replace("\n", "\r\n");
     let response = app()
         .oneshot(
             Request::builder()
@@ -284,7 +283,7 @@ async fn test_zstd() {
                 .method("GET")
                 .header("X-Real-Ip", "1.2.3.4")
                 .header("Content-Type", "application/json")
-                .body(Full::from(""))
+                .body(http_body_util::Full::default())
                 .unwrap(),
         )
         .await

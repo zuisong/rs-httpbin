@@ -40,6 +40,7 @@ use crate::data::{Headers, Http, Queries};
 
 mod data;
 mod ws;
+mod ws_chat;
 
 #[cfg(test)]
 mod tests;
@@ -108,6 +109,7 @@ fn app() -> Router<()> {
             middleware::from_fn(delay)
         }))
         .route("/websocket/echo", any(ws::ws_handler))
+        .route("/websocket/chat", any(ws_chat::ws_handler))
 
         //keep me
         ;

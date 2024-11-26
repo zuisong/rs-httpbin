@@ -37,18 +37,17 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
         let msg = match res {
             Either::Left(_) => {
                 if let Err(e) = socket.send(Message::Close(None)).await {
-                    info!("Could not send Close due to {e}, probably it is ok?");
+                    info!("timeout: Could not send Close due to {e}, probably it is ok?");
                 } else {
-                    info!("Close sent to {who}")
+                    info!("timeout: Close sent to {who}")
                 }
                 break;
             }
-            Either::Right(msg) => msg,
-        };
-
-        let Some(Ok(msg)) = msg else {
-            info!("client {who} abruptly disconnected");
-            break;
+            Either::Right(Some(Ok(msg))) => msg,
+            Either::Right(_) => {
+                info!("client {who} abruptly disconnected");
+                break;
+            }
         };
 
         match process_message(msg, who) {

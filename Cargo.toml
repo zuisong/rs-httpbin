@@ -7,7 +7,7 @@ edition = "2021"
 markdown = "1.0.0-alpha.21"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "~1", features = ["rt-multi-thread"] }
+tokio = { version = "~1", features = ["rt-multi-thread", "signal"] }
 tracing-subscriber = { version = "0.3", default-features = false, features = ["env-filter", "json", "fmt"] }
 tracing = "0.1"
 mime = "0.3"
@@ -31,6 +31,8 @@ serde_urlencoded = "0.7"
 uuid = { version = "1.11", features = ["v4"] }
 derive_more = { version = "1.0.0", features = ["deref_mut", "deref"] }
 tokio-util = "0.7"
+once_cell = "1.20.2"
+futures-util = "0.3.31"
 
 
 [dev-dependencies]
