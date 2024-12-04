@@ -146,7 +146,7 @@ async fn main() {
             let method = request.method().as_str();
             debug_span!("request_id", method, matched_path, request_id,)
         }))
-        .layer(CorsLayer::permissive())
+        .layer(CorsLayer::very_permissive())
         .layer(socket_io_chat::socket_io_layer());
 
     let app = router.layer(service);
