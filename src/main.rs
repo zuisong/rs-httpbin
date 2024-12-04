@@ -110,6 +110,7 @@ fn app() -> Router<()> {
         }))
         .route("/websocket/echo", any(ws::ws_handler))
         .route("/websocket/chat", any(ws_chat::ws_handler))
+        .route("/socket-io/chat", any( ||async {Html(include_str!("../assets/socketio-chat.html")) } ))
 
         //keep me
         ;
@@ -123,6 +124,8 @@ fn app() -> Router<()> {
 
     router
 }
+
+mod socket_io_chat;
 
 #[tokio::main]
 async fn main() {
@@ -143,7 +146,8 @@ async fn main() {
             let method = request.method().as_str();
             debug_span!("request_id", method, matched_path, request_id,)
         }))
-        .layer(CorsLayer::permissive());
+        .layer(CorsLayer::permissive())
+        .layer(socket_io_chat::socket_io_layer());
 
     let app = router.layer(service);
 

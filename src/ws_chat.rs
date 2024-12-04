@@ -13,7 +13,7 @@ use tokio::sync::{mpsc, Mutex};
 use tokio_stream::StreamExt as _;
 use tracing::{debug, info};
 
-static STATE: Lazy<Arc<Mutex<Shared>>> = Lazy::new(|| Arc::new(Mutex::new(Shared::new())));
+const STATE: Lazy<Arc<Mutex<Shared>>> = Lazy::new(|| Arc::new(Mutex::new(Shared::new())));
 
 pub async fn ws_handler(ws: Option<WebSocketUpgrade>, ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Response {
     match ws {
