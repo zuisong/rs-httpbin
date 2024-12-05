@@ -3,7 +3,6 @@
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <!-- 添加视口元标签 -->
         <title>WebSocket Chat Example</title>
         <script type="text/javascript">
             window.onload = function () {
@@ -12,9 +11,8 @@
                 var messages = document.getElementById("messages");
 
                 function appendLog(item) {
-                    var doScroll =
-                        messages.scrollTop >
-                            messages.scrollHeight - messages.clientHeight - 1;
+                    var doScroll = messages.scrollTop >
+                        messages.scrollHeight - messages.clientHeight - 1;
                     messages.appendChild(item);
                     if (doScroll) {
                         messages.scrollTop = messages.scrollHeight -

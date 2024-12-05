@@ -50,7 +50,7 @@ pub(crate) fn socket_io_layer() -> SocketIoLayer {
         // io.ns("/", socket_io_echo::on_connect);
         io.ns("/socketio-chat", on_connect);
     }
-    return socketio_layer;
+    socketio_layer
 }
 
 fn on_connect(s: SocketRef) {
