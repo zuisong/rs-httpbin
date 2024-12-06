@@ -1,128 +1,81 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>WebSocket Chat Example</title>
-        <script type="text/javascript">
-            window.onload = function () {
-                var conn;
-                var msg = document.getElementById("msg");
-                var messages = document.getElementById("messages");
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Chat Example</title>
+    <link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css">
+    <script type="text/javascript">
+      window.onload = function () {
+        var conn;
+        var msg = document.getElementById("msg");
+        var messages = document.getElementById("messages");
 
-                function appendLog(item) {
-                    var doScroll = messages.scrollTop >
-                        messages.scrollHeight - messages.clientHeight - 1;
-                    messages.appendChild(item);
-                    if (doScroll) {
-                        messages.scrollTop = messages.scrollHeight -
-                            messages.clientHeight;
-                    }
-                }
+        function appendLog(item) {
+          var doScroll = messages.scrollTop >
+            messages.scrollHeight - messages.clientHeight - 1;
+          messages.appendChild(item);
+          if (doScroll) {
+            messages.scrollTop = messages.scrollHeight -
+              messages.clientHeight;
+          }
+        }
 
-                document.getElementById("send").onclick = function () {
-                    if (!conn) {
-                        return false;
-                    }
-                    if (!msg.value) {
-                        return false;
-                    }
-                    conn.send(msg.value);
-                    msg.value = "";
-                    return false;
-                };
+        function sendMsg() {
+          if (!conn) {
+            return false;
+          }
+          if (!msg.value) {
+            return false;
+          }
+          conn.send(msg.value);
+          msg.value = "";
+          return false;
+        }
 
-                if (window["WebSocket"]) {
-                    const ws_protocol = window.location.href.startsWith("https")
-                        ? "wss://"
-                        : "ws://";
-                    conn = new WebSocket(
-                        ws_protocol + document.location.host + "/websocket/chat",
-                    );
-                    conn.onclose = function (evt) {
-                        var item = document.createElement("li");
-                        item.innerHTML = "<b>Connection closed.</b>";
-                        appendLog(item);
-                    };
-                    conn.onmessage = function (evt) {
-                        var messages = evt.data.split("\n");
-                        for (var i = 0; i < messages.length; i++) {
-                            var item = document.createElement("li");
-                            item.innerText = messages[i];
-                            appendLog(item);
-                        }
-                    };
-                } else {
-                    var item = document.createElement("li");
-                    item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
-                    appendLog(item);
-                }
-            };
-        </script>
-        <style>
-            body {
-                margin: 0;
-                padding-bottom: 3rem;
-                font-family:
-                    -apple-system,
-                    BlinkMacSystemFont,
-                    "Segoe UI",
-                    Roboto,
-                    Helvetica,
-                    Arial,
-                    sans-serif;
+        document.getElementById("send").onclick = sendMsg;
+        if (window["WebSocket"]) {
+          const ws_protocol = window.location.href.startsWith("https")
+            ? "wss://"
+            : "ws://";
+          conn = new WebSocket(
+            ws_protocol + document.location.host + "/websocket/chat",
+          );
+          conn.onclose = function (evt) {
+            var item = document.createElement("li");
+            item.innerHTML = "<b>Connection closed.</b>";
+            appendLog(item);
+          };
+          conn.onmessage = function (evt) {
+            var messages = evt.data.split("\n");
+            for (var i = 0; i < messages.length; i++) {
+              var item = document.createElement("li");
+              item.innerText = messages[i];
+              appendLog(item);
             }
+          };
+        } else {
+          var item = document.createElement("li");
+          item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
+          appendLog(item);
+        }
 
-            #form {
-                background: rgba(0, 0, 0, 0.15);
-                padding: 0.25rem;
-                position: fixed;
-                bottom: 0;
-                left: 0;
-                right: 0;
-                display: flex;
-                height: 3rem;
-                box-sizing: border-box;
-                backdrop-filter: blur(10px);
-            }
-            #msg {
-                border: none;
-                padding: 0 1rem;
-                flex-grow: 1;
-                border-radius: 2rem;
-                margin: 0.25rem;
-            }
-            #input:focus {
-                outline: none;
-            }
-            #form > button {
-                background: #333;
-                border: none;
-                padding: 0 1rem;
-                margin: 0.25rem;
-                border-radius: 3px;
-                outline: none;
-                color: #fff;
-            }
+        const form = document.querySelector("#form");
 
-            #messages {
-                list-style-type: none;
-                margin: 0;
-                padding: 0;
-            }
-            #messages > li {
-                padding: 0.5rem 1rem;
-            }
-            #messages > li:nth-child(odd) {
-                background: #efefef;
-            }
-        </style>
-    </head>
-    <body>
-        <ul id="messages"></ul>
-        <form id="form">
-            <input type="text" id="msg" autocomplete="off" autofocus />
-            <button type="button" id="send">Send</button>
-        </form>
-    </body>
+        form.addEventListener("keypress", function (event) {
+          if (event.keyCode === 13) {
+            event.preventDefault();
+            sendMsg();
+          }
+        });
+      };
+    </script>
+  </head>
+  <body>
+    <ul id="messages"></ul>
+    <div id="form">
+      <input type="text" id="msg" autocomplete="off" autofocus />
+      <button type="button" id="send">Send</button>
+    </div>
+  </body>
 </html>

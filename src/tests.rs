@@ -125,12 +125,9 @@ async fn the_real_deal() {
         .unwrap();
 
     let body = response.body_as_json().await;
-    assert_eq!(
-        body,
-        json! {
-            {"origin": "127.0.0.1"}
-        }
-    );
+    assert_eq!(body, json! {
+        {"origin": "127.0.0.1"}
+    });
 }
 
 #[tokio::test]

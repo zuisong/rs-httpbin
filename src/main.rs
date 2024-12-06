@@ -6,35 +6,35 @@ use std::{
 };
 
 use axum::{
+    Router,
     body::{Body, Bytes},
     extract::{Host, MatchedPath, Path, Query, Request},
-    http::{header::*, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
+    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header::*},
     middleware,
-    response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
+    response::{Html, IntoResponse, Redirect, Response, Sse, sse::Event},
     routing::*,
-    Router,
 };
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
-    extract::{cookie, CookieJar},
+    TypedHeader,
+    extract::{CookieJar, cookie},
     headers::{
-        authorization::{Basic, Bearer},
         Authorization, ContentType, HeaderMapExt, UserAgent,
+        authorization::{Basic, Bearer},
     },
     response::ErasedJson,
-    TypedHeader,
 };
 use axum_garde::WithValidation;
-use base64::{prelude::BASE64_STANDARD, Engine};
+use base64::{Engine, prelude::BASE64_STANDARD};
 use garde::Validate;
 use indoc::indoc;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_PLAIN_UTF_8, TEXT_XML};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use tower::ServiceBuilder;
-use tower_http::{cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer, ServiceBuilderExt};
+use tower_http::{ServiceBuilderExt, cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer};
 use tracing::debug_span;
-use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt::layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::data::{Headers, Http, Queries};
 
@@ -187,7 +187,7 @@ async fn unstable(WithValidation(query): WithValidation<Query<UnstableQueryParam
                     query.failure_rate.map_or("None".to_string(), |it| f32::to_string(&it))
                 ),
             ))
-            .into_response()
+            .into_response();
         }
     };
 

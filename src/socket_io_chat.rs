@@ -1,10 +1,10 @@
-use std::sync::{atomic::AtomicUsize, Arc};
+use std::sync::{Arc, atomic::AtomicUsize};
 
 use serde::{Deserialize, Serialize};
 use socketioxide::{
+    SocketIo,
     extract::{Data, Extension, SocketRef, State},
     layer::SocketIoLayer,
-    SocketIo,
 };
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
