@@ -4,15 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebSocket Chat Example</title>
-    <link rel="stylesheet" href="https://matcha.mizu.sh/matcha.css">
+    <link rel="stylesheet" href="//matcha.mizu.sh/matcha.css">
     <script type="text/javascript">
       window.onload = function () {
-        var conn;
-        var msg = document.getElementById("msg");
-        var messages = document.getElementById("messages");
+        /** @type WebSocket */
+        let conn;
+        let msg = document.getElementById("msg");
+        let messages = document.getElementById("messages");
 
         function appendLog(item) {
-          var doScroll = messages.scrollTop >
+          let doScroll = messages.scrollTop >
             messages.scrollHeight - messages.clientHeight - 1;
           messages.appendChild(item);
           if (doScroll) {
@@ -35,27 +36,27 @@
 
         document.getElementById("send").onclick = sendMsg;
         if (window["WebSocket"]) {
-          const ws_protocol = window.location.href.startsWith("https")
+          const ws_protocol = location.href.startsWith("https")
             ? "wss://"
             : "ws://";
           conn = new WebSocket(
-            ws_protocol + document.location.host + "/websocket/chat",
+            ws_protocol + location.host + "/websocket/chat",
           );
           conn.onclose = function (evt) {
-            var item = document.createElement("li");
+            let item = document.createElement("li");
             item.innerHTML = "<b>Connection closed.</b>";
             appendLog(item);
           };
           conn.onmessage = function (evt) {
-            var messages = evt.data.split("\n");
-            for (var i = 0; i < messages.length; i++) {
-              var item = document.createElement("li");
+            let messages = evt.data.split("\n");
+            for (let i = 0; i < messages.length; i++) {
+              let item = document.createElement("li");
               item.innerText = messages[i];
               appendLog(item);
             }
           };
         } else {
-          var item = document.createElement("li");
+          let item = document.createElement("li");
           item.innerHTML = "<b>Your browser does not support WebSockets.</b>";
           appendLog(item);
         }

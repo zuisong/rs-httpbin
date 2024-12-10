@@ -6,35 +6,35 @@ use std::{
 };
 
 use axum::{
-    Router,
     body::{Body, Bytes},
-    extract::{Host, MatchedPath, Path, Query, Request},
-    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header::*},
+    extract::{MatchedPath, Path, Query, Request},
+    http::{header::*, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
     middleware,
-    response::{Html, IntoResponse, Redirect, Response, Sse, sse::Event},
+    response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
     routing::*,
+    Router,
 };
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
-    TypedHeader,
-    extract::{CookieJar, cookie},
+    extract::{cookie, CookieJar},
     headers::{
-        Authorization, ContentType, HeaderMapExt, UserAgent,
         authorization::{Basic, Bearer},
+        Authorization, ContentType, HeaderMapExt, UserAgent,
     },
     response::ErasedJson,
+    TypedHeader,
 };
 use axum_garde::WithValidation;
-use base64::{Engine, prelude::BASE64_STANDARD};
+use base64::{prelude::BASE64_STANDARD, Engine};
 use garde::Validate;
 use indoc::indoc;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_PLAIN_UTF_8, TEXT_XML};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use tower::ServiceBuilder;
-use tower_http::{ServiceBuilderExt, cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer};
+use tower_http::{cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer, ServiceBuilderExt};
 use tracing::debug_span;
-use tracing_subscriber::{EnvFilter, fmt::layer, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 use crate::data::{Headers, Http, Queries};
 
@@ -59,7 +59,7 @@ fn app() -> Router<()> {
         .route("/trace", trace(anything))
         //
         .route("/anything", any(anything))
-        .route("/anything/*{id}", any(anything))
+        .route("/anything/*path", any(anything))
         //
         .route("/absolute-redirect/:n", any(redirect::absolute_redirect))
         .route("/redirect/:n", any(redirect::redirect))
@@ -101,19 +101,23 @@ fn app() -> Router<()> {
         .route("/links/:total/:page", any(links::links))
         .route("/redirect-to", any(redirect::redirect_to))
         .route("/unstable", get(unstable))
-        .route("/delay/:n", any(anything).layer({
-            async fn delay(Path(delays): Path<u16>, request: Request, next: middleware::Next) -> impl IntoResponse {
-                tokio::time::sleep(Duration::from_secs(delays.min(10).into())).await;
-                next.run(request).await
-            }
-            middleware::from_fn(delay)
-        }))
+        .route(
+            "/delay/:n",
+            any(anything).layer({
+                async fn delay(Path(delays): Path<u16>, request: Request, next: middleware::Next) -> impl IntoResponse {
+                    tokio::time::sleep(Duration::from_secs(delays.min(10).into())).await;
+                    next.run(request).await
+                }
+                middleware::from_fn(delay)
+            }),
+        )
         .route("/websocket/echo", any(ws::ws_handler))
         .route("/websocket/chat", any(ws_chat::ws_handler))
         .route("/socket-io/chat", any( ||async {Html(include_str!("../assets/socketio-chat.html")) } ))
-
-        //keep me
+        /* keep */
         ;
+
+    // println!("{}", api.to_pretty_json().unwrap());
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
@@ -121,6 +125,8 @@ fn app() -> Router<()> {
             get(anything).layer(SetRequestHeaderLayer::overriding(ACCEPT_ENCODING, HeaderValue::from_static(format))),
         );
     }
+
+    // router.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api))
 
     router
 }
@@ -278,7 +284,6 @@ fn get_headers(header_map: &HeaderMap) -> Headers {
 }
 
 mod cookies {
-    use time::OffsetDateTime;
 
     use super::*;
 
@@ -300,8 +305,8 @@ mod cookies {
         for (k, v) in query {
             jar = jar.add(
                 cookie::Cookie::build((k, v.into_iter().next().unwrap_or_default()))
-                    .max_age(time::Duration::ZERO)
-                    .expires(OffsetDateTime::now_utc())
+                    .max_age(std::time::Duration::ZERO.try_into().unwrap())
+                    .expires(Some(std::time::SystemTime::now().into()))
                     .http_only(true)
                     .build(),
             );
@@ -309,14 +314,13 @@ mod cookies {
         (StatusCode::FOUND, (jar, Redirect::to("/cookies"))).into_response()
     }
 }
-
 async fn anything(
     method: Method,
     uri: Uri,
     Query(query): Query<Vec<(String, String)>>,
     header_map: HeaderMap,
     content_type: Option<TypedHeader<ContentType>>,
-    InsecureClientIp(origin): InsecureClientIp,
+    // InsecureClientIp(origin): InsecureClientIp,
     body: Bytes,
 ) -> Response {
     let headers = get_headers(&header_map);
@@ -390,7 +394,7 @@ async fn anything(
         method: method.to_string(),
         uri: uri.to_string(),
         headers,
-        origin: origin.into(),
+        origin: None,
         args: queries,
         data: body_string,
         json,
@@ -555,6 +559,8 @@ async fn bearer(header_map: HeaderMap) -> impl IntoResponse {
 }
 
 mod redirect {
+
+    use axum::extract::Host;
 
     use super::*;
 
