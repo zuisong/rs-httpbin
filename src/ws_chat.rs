@@ -9,7 +9,7 @@ use axum::{
 };
 use futures_util::FutureExt as _;
 use once_cell::sync::Lazy;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{mpsc, Mutex};
 use tokio_stream::StreamExt as _;
 use tracing::{debug, info};
 
