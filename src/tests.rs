@@ -77,6 +77,46 @@ async fn image_type(type_: &'static str) {
     assert_eq!(body, (HeaderValue::try_from(format!("image/{type_}")).ok()).as_ref());
 }
 
+#[tokio::test]
+async fn image() {
+    let image_types = vec!["jpeg", "png", "svg", "webp", "jxl", "avif"];
+
+    for &image_type in &image_types {
+        let response = app()
+            .oneshot(
+                Request::builder()
+                    .uri(format!("/image"))
+                    .header("Accept", format!("/image/{image_type}"))
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let content_type = response.headers().get(CONTENT_TYPE).unwrap();
+        assert_eq!(content_type.to_str().unwrap(), format!("image/{image_type}"));
+    }
+}
+
+#[tokio::test]
+async fn image_types() {
+    let image_types = vec!["jpeg", "png", "svg", "webp", "jxl", "avif"];
+
+    for &image_type in &image_types {
+        let response = app()
+            .oneshot(Request::builder().uri(format!("/image/{image_type}")).body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::OK);
+
+        let content_type = response.headers().get(CONTENT_TYPE).unwrap();
+        assert_eq!(content_type.to_str().unwrap(), format!("image/{image_type}"));
+    }
+}
+
 #[test_case::test_case("./assets/sample.json", "/json")]
 #[test_case::test_case("./assets/sample.xml", "/xml")]
 #[test_case::test_case("./assets/sample.html", "/html")]
@@ -173,6 +213,63 @@ async fn basic_auth() {
         .oneshot(
             Request::builder()
                 .uri("/basic-auth/a/b")
+                .header("Authorization", format!("Basic {}", BASE64_STANDARD.encode("a:b").as_str()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.body_as_json().await,
+        json!({
+            "authorized": true,
+            "user": "a"
+        })
+    );
+}
+
+#[tokio::test]
+async fn hidden_basic_auth() {
+    let response = app()
+        .oneshot(Request::builder().uri("/hidden-basic-auth/a/b").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        response.body_as_json().await,
+        json!({
+            "error": "Not Found",
+            "status_code": 404,
+        })
+    );
+
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/hidden-basic-auth/a/b")
+                .header("Authorization", format!("Basic {}", BASE64_STANDARD.encode("a1:a").as_str()))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(
+        response.body_as_json().await,
+        json!({
+         "error": "Not Found",
+            "status_code": 404,
+        })
+    );
+
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/hidden-basic-auth/a/b")
                 .header("Authorization", format!("Basic {}", BASE64_STANDARD.encode("a:b").as_str()))
                 .body(Body::empty())
                 .unwrap(),
@@ -290,4 +387,240 @@ async fn test_zstd() {
         .unwrap();
     // assert_eq!(response.status(), StatusCode::OK);
     println!("{}", response.body_as_string().await);
+}
+
+#[tokio::test]
+async fn user_agent() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/user-agent")
+                .header("User-Agent", "TestAgent/1.0")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_json().await;
+    assert_eq!(
+        body,
+        json!({
+            "user-agent": "TestAgent/1.0"
+        })
+    );
+}
+
+#[tokio::test]
+async fn headers() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/headers")
+                .header("X-Custom-Header", "CustomValue")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_json().await;
+    assert_eq!(body["headers"]["x-custom-header"], json!("CustomValue"));
+}
+
+#[tokio::test]
+async fn cookies() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/cookies")
+                .header("Cookie", "key1=value1; key2=value2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    dbg!(&response);
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_json().await;
+    assert_eq!(
+        body,
+        json!({
+            "key1": "value1",
+            "key2": "value2"
+        })
+    );
+}
+
+#[tokio::test]
+async fn cookies_set() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/cookies/set?key1=value1&key2=value2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    dbg!(&response);
+    // assert_eq!(response.status(), StatusCode::FOUND);
+
+    let cookies = response.headers().get_all("set-cookie").iter().collect::<Vec<_>>();
+    assert!(cookies.iter().any(|cookie| cookie.to_str().unwrap().contains("key1=value1")));
+    assert!(cookies.iter().any(|cookie| cookie.to_str().unwrap().contains("key2=value2")));
+}
+
+#[tokio::test]
+async fn cookies_del() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/cookies/delete?key1=value1&key2=value2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    dbg!(&response);
+    // assert_eq!(response.status(), StatusCode::FOUND);
+
+    let cookies = response.headers().get_all("set-cookie").iter().collect::<Vec<_>>();
+    assert!(cookies
+        .iter()
+        .any(|cookie| cookie.to_str().unwrap().contains("key1=; HttpOnly; Max-Age=0")));
+    assert!(cookies
+        .iter()
+        .any(|cookie| cookie.to_str().unwrap().contains("key2=; HttpOnly; Max-Age=0")));
+}
+
+#[tokio::test]
+async fn hostname() {
+    let response = app()
+        .oneshot(Request::builder().uri("/hostname").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_json().await;
+    assert!(body["hostname"].is_string());
+}
+
+#[tokio::test]
+async fn uuid() {
+    let response = app()
+        .oneshot(Request::builder().uri("/uuid").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_json().await;
+    assert!(body["uuid"].is_string());
+}
+
+#[tokio::test]
+async fn unstable() {
+    let response = app()
+        .oneshot(Request::builder().uri("/unstable?failure_rate=0.0").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let response = app()
+        .oneshot(Request::builder().uri("/unstable?failure_rate=1.0").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+
+    let response = app()
+        .oneshot(Request::builder().uri("/unstable?failure_rate=2").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    dbg!(&response);
+
+    // assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert!(response.body_as_string().await.contains("not in range [0, 1]"));
+}
+
+#[tokio::test]
+async fn bearer() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/bearer")
+                .header("Authorization", "Bearer test_token")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_json().await;
+    assert_eq!(body["authorized"], json!(true));
+    assert_eq!(body["token"], json!("test_token"));
+}
+
+#[tokio::test]
+async fn redirect() {
+    let response = app()
+        .oneshot(Request::builder().uri("/redirect/1").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FOUND);
+    assert_eq!(response.headers().get("location").unwrap(), "/get");
+}
+
+#[tokio::test]
+async fn base64_decode() {
+    let response = app()
+        .oneshot(Request::builder().uri("/base64/SGVsbG8gd29ybGQ=").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_string().await;
+    assert_eq!(body, "Hello world");
+}
+
+#[tokio::test]
+async fn base64_encode() {
+    let response = app()
+        .oneshot(Request::builder().uri("/base64/encode/HelloWorld").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_string().await;
+    assert_eq!(body, "SGVsbG9Xb3JsZA==");
+}
+
+#[tokio::test]
+async fn base64() {
+    let response = app()
+        .oneshot(Request::builder().uri("/base64/SGVsbG8gd29ybGQ=").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_string().await;
+    assert_eq!(body, "Hello world");
 }

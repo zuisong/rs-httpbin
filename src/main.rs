@@ -176,7 +176,7 @@ async fn headers(header_map: HeaderMap) -> impl IntoResponse {
 
 #[derive(Debug, Validate, Deserialize)]
 struct UnstableQueryParam {
-    #[garde(range(min = 0.0, max = 1.0))]
+    #[garde(range(min = 0.0, max = 2.0))]
     pub failure_rate: Option<f32>,
 }
 
@@ -292,19 +292,19 @@ mod cookies {
         ErasedJson::pretty(m)
     }
 
-    pub async fn cookies_set(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
+    pub async fn cookies_set(Query(query): Query<BTreeMap<String, String>>) -> impl IntoResponse {
         let mut jar = CookieJar::new();
         for (k, v) in query {
-            jar = jar.add(cookie::Cookie::new(k, v.into_iter().next().unwrap_or_default()));
+            jar = jar.add(cookie::Cookie::new(k, v));
         }
         (StatusCode::FOUND, (jar, Redirect::to("/cookies"))).into_response()
     }
 
-    pub async fn cookies_del(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
+    pub async fn cookies_del(Query(query): Query<BTreeMap<String, String>>) -> impl IntoResponse {
         let mut jar = CookieJar::new();
-        for (k, v) in query {
+        for (k, _) in query {
             jar = jar.add(
-                cookie::Cookie::build((k, v.into_iter().next().unwrap_or_default()))
+                cookie::Cookie::build((k, ""))
                     .max_age(std::time::Duration::ZERO.try_into().unwrap())
                     .expires(Some(std::time::SystemTime::now().into()))
                     .http_only(true)
@@ -320,7 +320,7 @@ async fn anything(
     Query(query): Query<Vec<(String, String)>>,
     header_map: HeaderMap,
     content_type: Option<TypedHeader<ContentType>>,
-    // InsecureClientIp(origin): InsecureClientIp,
+    InsecureClientIp(origin): InsecureClientIp,
     body: Bytes,
 ) -> Response {
     let headers = get_headers(&header_map);
@@ -394,7 +394,7 @@ async fn anything(
         method: method.to_string(),
         uri: uri.to_string(),
         headers,
-        origin: None,
+        origin: origin.into(),
         args: queries,
         data: body_string,
         json,
