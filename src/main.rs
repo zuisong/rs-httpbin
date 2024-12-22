@@ -453,14 +453,12 @@ async fn uuid() -> impl IntoResponse {
     })
 }
 
-async fn response_headers(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
+async fn response_headers(Query(query): Query<BTreeMap<String, String>>) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
 
-    for (k, vals) in query.iter() {
-        for v in vals {
-            if let (Ok(k), Ok(v)) = (HeaderName::from_str(k), HeaderValue::from_str(v)) {
-                headers.append(k, v);
-            };
+    for (k, v) in query.iter() {
+        if let (Ok(k), Ok(v)) = (HeaderName::from_str(k), HeaderValue::from_str(v)) {
+            headers.append(k, v);
         }
     }
 

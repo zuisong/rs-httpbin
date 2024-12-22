@@ -587,6 +587,35 @@ async fn redirect() {
 }
 
 #[tokio::test]
+async fn redirect_to() {
+    let response = app()
+        .oneshot(Request::builder().uri("/redirect-to?url=/get").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FOUND);
+    assert_eq!(response.headers().get("location").unwrap(), "/get");
+}
+
+#[tokio::test]
+async fn absolute_redirect() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/absolute-redirect/2")
+                .method("GET")
+                .header("host", "httpbin.org")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FOUND);
+    assert!(response.headers().get("location").unwrap().to_str().unwrap().starts_with("http"));
+}
+
+#[tokio::test]
 async fn base64_decode() {
     let response = app()
         .oneshot(Request::builder().uri("/base64/SGVsbG8gd29ybGQ=").body(Body::empty()).unwrap())
@@ -623,4 +652,89 @@ async fn base64() {
 
     let body = response.body_as_string().await;
     assert_eq!(body, "Hello world");
+}
+
+#[tokio::test]
+async fn response_headers() {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/response-headers?key1=value1&key2=value2")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let headers = response.headers();
+    assert_eq!(headers.get("key1").unwrap(), "value1");
+    assert_eq!(headers.get("key2").unwrap(), "value2");
+}
+
+#[tokio::test]
+async fn links() {
+    let response = app()
+        .oneshot(Request::builder().uri("/links/11/11").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_string().await;
+    for i in 0..=10 {
+        assert!(body.contains(&format!("/links/11/{i}")));
+    }
+}
+
+#[tokio::test]
+async fn sse() {
+    let response = app()
+        .oneshot(Request::builder().uri("/sse?count=1").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_string().await;
+    assert!(body.contains("data:"));
+}
+
+#[tokio::test]
+async fn robots_txt() {
+    let response = app()
+        .oneshot(Request::builder().uri("/robots.txt").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_string().await;
+    assert!(body.contains("User-agent: *"));
+    assert!(body.contains("Disallow: /deny"));
+}
+
+#[tokio::test]
+async fn encoding_utf8() {
+    let response = app()
+        .oneshot(Request::builder().uri("/encoding/utf8").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = response.body_as_string().await;
+    assert!(body.contains("UTF-8"));
+}
+
+#[tokio::test]
+async fn relative_redirect() {
+    let response = app()
+        .oneshot(Request::builder().uri("/relative-redirect/1").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::FOUND);
+    assert_eq!(response.headers().get("location").unwrap(), "/get");
 }
