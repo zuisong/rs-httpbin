@@ -1,0 +1,35 @@
+name: Test
+
+on:
+  push:
+  workflow_dispatch:
+  pull_request:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        rust_toolchain: [stable, nightly]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hecrj/setup-rust-action@v2
+        with:
+          rust-version: ${{ matrix.rust_toolchain }}
+
+      - name: Install cargo tools
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Generate code coverage
+        run: cargo llvm-cov test --all-features --workspace --lcov --output-path lcov.info
+
+      - name: Build
+        run: cargo build --verbose
+
+      - name: Coveralls
+        if: matrix.os == 'ubuntu-latest' && matrix.rust_toolchain == 'stable'
+        uses: coverallsapp/github-action@v2.1.0
