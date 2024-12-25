@@ -61,6 +61,7 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
             }
         }
     }
+    let _ignore = socket.close().await;
 
     info!("Websocket context {who} destroyed");
 }

@@ -7,7 +7,7 @@ use std::{
 
 use axum::{
     body::{Body, Bytes},
-    extract::{MatchedPath, Path, Query, Request},
+    extract::{Host, MatchedPath, Path, Query, Request},
     http::{header::*, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
     middleware,
     response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
@@ -557,9 +557,6 @@ async fn bearer(header_map: HeaderMap) -> impl IntoResponse {
 }
 
 mod redirect {
-
-    use axum::extract::Host;
-
     use super::*;
 
     pub async fn redirect(Path(n): Path<i32>) -> Response {

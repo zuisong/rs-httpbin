@@ -1,8 +1,11 @@
+use std::future::IntoFuture as _;
+
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
 use base64::prelude::BASE64_STANDARD;
+use futures_util::SinkExt as _;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use serde_json::json;
 use tokio::net::TcpListener;
@@ -691,7 +694,7 @@ async fn links() {
 #[tokio::test]
 async fn sse() {
     let response = app()
-        .oneshot(Request::builder().uri("/sse?count=1").body(Body::empty()).unwrap())
+        .oneshot(Request::builder().uri("/sse?count=1&duration=1ms").body(Body::empty()).unwrap())
         .await
         .unwrap();
 
@@ -737,4 +740,25 @@ async fn relative_redirect() {
 
     assert_eq!(response.status(), StatusCode::FOUND);
     assert_eq!(response.headers().get("location").unwrap(), "/get");
+}
+
+#[tokio::test]
+async fn websocket_echo() {
+    use tokio_tungstenite::tungstenite::protocol::Message;
+    let listener = tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0)))
+        .await
+        .unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(axum::serve(listener, app().into_make_service_with_connect_info::<SocketAddr>()).into_future());
+
+    let url = format!("ws://{addr}/websocket/echo");
+    let (mut socket, _response) = tokio_tungstenite::connect_async(url).await.expect("Failed to connect");
+
+    let msg = "Hello, WebSocket!";
+    socket.send(Message::Text(msg.into())).await.unwrap();
+
+    let response = socket.next().await.unwrap().unwrap();
+    assert_eq!(response.into_text().unwrap(), format!("echo --> {}", msg));
+    socket.send(Message::Close(None)).await.unwrap();
+    tokio::time::sleep(std::time::Duration::from_secs_f32(0.01)).await;
 }
