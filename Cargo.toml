@@ -39,6 +39,7 @@ socketioxide = {version = "0.15.1", features = ["extensions", "state"]}
 
 
 [dev-dependencies]
+anyhow = "1"
 http-body-util = "0.1"
 hyper-util = {version = "0.1", features = ["client-legacy"]}
 test-case = "3"

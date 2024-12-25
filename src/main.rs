@@ -117,8 +117,6 @@ fn app() -> Router<()> {
         /* keep */
         ;
 
-    // println!("{}", api.to_pretty_json().unwrap());
-
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
             format!("/{format}").as_str(),
@@ -305,13 +303,13 @@ mod cookies {
         for (k, _) in query {
             jar = jar.add(
                 cookie::Cookie::build((k, ""))
-                    .max_age(std::time::Duration::ZERO.try_into().unwrap())
+                    .max_age(std::time::Duration::ZERO.try_into().unwrap_or_default())
                     .expires(Some(std::time::SystemTime::now().into()))
                     .http_only(true)
                     .build(),
             );
         }
-        (StatusCode::FOUND, (jar, Redirect::to("/cookies"))).into_response()
+        (StatusCode::FOUND, (jar, Redirect::to("/cookies")))
     }
 }
 async fn anything(
