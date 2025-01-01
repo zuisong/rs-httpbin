@@ -11,9 +11,9 @@ tokio = {version = "~1", features = ["rt-multi-thread", "signal"]}
 tracing-subscriber = {version = "0.3", default-features = false, features = ["env-filter", "json", "fmt"]}
 tracing = "0.1"
 mime = "0.3"
-axum = {version = "0.7", features = ["http2", "tower-log", "matched-path", "ws"]}
-axum-extra = {version = "0.9", features = ["typed-header", "erased-json", "query", "cookie"]}
-axum-client-ip = "0.6"
+axum = {version = "0.8", features = ["http2", "tower-log", "matched-path", "ws"]}
+axum-extra = {version = "0.10.0", features = ["typed-header", "erased-json", "query", "cookie"]}
+axum-client-ip = "0.7.0"
 base64 = "~0.22"
 humantime-serde = "1"
 hostname = "0.4"
@@ -21,13 +21,13 @@ tokio-stream = "0.1"
 minijinja = "2"
 indoc = "2"
 fastrand = "2"
-axum_garde = {version = "0.21", features = ["query"]}
+axum_garde = {version = "0.21", features = ["query"], path = "./axum_garde"}
 garde = {version = "0.21", features = ["derive"]}
 tower = "0.5"
 tower-http = {version = "0.6", features = ["trace", "cors", "compression-full", "set-header", "request-id", "util"]}
 multer = "3"
 serde_urlencoded = "0.7"
-uuid = {version = "1.11", features = ["v4", "serde",]}
+uuid = {version = "1.11", features = ["v4", "serde"]}
 derive_more = {version = "1.0.0", features = ["deref_mut", "deref"]}
 tokio-util = "0.7"
 once_cell = "1.20.2"
@@ -56,3 +56,8 @@ default = []
 #openapi = ["dep:utoipa", "dep:utoipa-axum"]
 #openapi-swagger-ui = ["openapi", "utoipa-swagger-ui"]
 
+
+# [workspace]
+# members = [
+#     "axum_garde",
+# ]

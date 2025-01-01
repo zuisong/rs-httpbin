@@ -7,7 +7,7 @@ use std::{
 
 use axum::{
     body::{Body, Bytes},
-    extract::{Host, MatchedPath, Path, Query, Request},
+    extract::{MatchedPath, Path, Query, Request},
     http::{header::*, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
     middleware,
     response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
@@ -16,7 +16,7 @@ use axum::{
 };
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
-    extract::{cookie, CookieJar},
+    extract::{cookie, CookieJar, Host},
     headers::{
         authorization::{Basic, Bearer},
         Authorization, ContentType, HeaderMapExt, UserAgent,
@@ -59,14 +59,14 @@ fn app() -> Router<()> {
         .route("/trace", trace(anything))
         //
         .route("/anything", any(anything))
-        .route("/anything/*path", any(anything))
+        .route("/anything/{*path}", any(anything))
         //
-        .route("/absolute-redirect/:n", any(redirect::absolute_redirect))
-        .route("/redirect/:n", any(redirect::redirect))
-        .route("/relative-redirect/:n", any(redirect::relative_redirect))
+        .route("/absolute-redirect/{n}", any(redirect::absolute_redirect))
+        .route("/redirect/{n}", any(redirect::redirect))
+        .route("/relative-redirect/{n}", any(redirect::relative_redirect))
         //
-        .route("/basic-auth/:user/:passwd", any(basic_auth::basic_auth))
-        .route("/hidden-basic-auth/:user/:passwd", any(basic_auth::hidden_basic_auth))
+        .route("/basic-auth/{user}/{passwd}", any(basic_auth::basic_auth))
+        .route("/hidden-basic-auth/{user}/{passwd}", any(basic_auth::hidden_basic_auth))
         //
         .route("/user-agent", any(user_agent))
         .route("/headers", any(headers))
@@ -87,9 +87,9 @@ fn app() -> Router<()> {
         .route("/image/avif", any(image::avif))
         .route("/image/jxl", any(image::jxl))
         //
-        .route("/base64/:value", any(base_64::base64_decode))
-        .route("/base64/encode/:value", any(base_64::base64_encode))
-        .route("/base64/decode/:value", any(base_64::base64_decode))
+        .route("/base64/{value}", any(base_64::base64_decode))
+        .route("/base64/encode/{value}", any(base_64::base64_encode))
+        .route("/base64/decode/{value}", any(base_64::base64_decode))
         .route("/forms/post", any(resp_data::forms_post))
         .route("/sse", any(sse::sse_handler))
         .route("/cookies", any(cookies::cookies))
@@ -97,12 +97,12 @@ fn app() -> Router<()> {
         .route("/cookies/delete", any(cookies::cookies_del))
         .route("/encoding/utf8", any(utf8))
         .route("/robots.txt", any(robots_txt))
-        .route("/links/:total", any(links::links))
-        .route("/links/:total/:page", any(links::links))
+        .route("/links/{total}", any(links::links))
+        .route("/links/{total}/{page}", any(links::links))
         .route("/redirect-to", any(redirect::redirect_to))
         .route("/unstable", get(unstable))
         .route(
-            "/delay/:n",
+            "/delay/{n}",
             any(anything).layer({
                 async fn delay(Path(delays): Path<u16>, request: Request, next: middleware::Next) -> impl IntoResponse {
                     tokio::time::sleep(Duration::from_secs(delays.min(10).into())).await;
@@ -361,10 +361,10 @@ async fn anything(
                 let boundary = multer::parse_boundary(content_type).ok();
                 if let Some(boundary) = boundary {
                     let mut m = multer::Multipart::new(Body::from(body).into_data_stream(), boundary);
-                    // println!("{:?}", m);
+                    // println!("{?}", m);
 
                     while let Some((_idx, field)) = m.next_field_with_idx().await.unwrap_or_default() {
-                        // println!("{:?}",&field);
+                        // println!("{?}",&field);
                         match (field.file_name(), field.name()) {
                             (None, Some(name)) => form
                                 .entry(name.to_string())

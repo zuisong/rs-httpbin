@@ -3,19 +3,23 @@ use std::{net::SocketAddr, ops::ControlFlow, time::Duration};
 use axum::{
     extract::{
         connect_info::ConnectInfo,
-        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade},
+        ws::{rejection::WebSocketUpgradeRejection, CloseFrame, Message, WebSocket, WebSocketUpgrade},
     },
     http::StatusCode,
     response::IntoResponse,
 };
 use axum_extra::response::ErasedJson;
+use futures_util::SinkExt;
 use tokio_util::either::Either;
 use tracing::info;
 
-pub async fn ws_handler(ws: Option<WebSocketUpgrade>, ConnectInfo(addr): ConnectInfo<SocketAddr>) -> impl IntoResponse {
+pub async fn ws_handler(
+    ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+) -> impl IntoResponse {
     match ws {
-        Some(ws) => ws.on_upgrade(move |socket| handle_socket(socket, addr)),
-        None => (
+        Ok(ws) => ws.on_upgrade(move |socket| handle_socket(socket, addr)),
+        Err(WebSocketUpgradeRejection::InvalidUpgradeHeader(_)) => (
             StatusCode::BAD_REQUEST,
             ErasedJson::pretty(crate::data::ErrorDetail::new(
                 400,
@@ -24,6 +28,7 @@ pub async fn ws_handler(ws: Option<WebSocketUpgrade>, ConnectInfo(addr): Connect
             )),
         )
             .into_response(),
+        Err(e) => e.into_response(),
     }
 }
 
@@ -70,7 +75,7 @@ fn process_message(msg: Message, who: SocketAddr) -> ControlFlow<(), Option<Mess
     match msg {
         Message::Text(t) => {
             let msg = format!("echo --> {t}");
-            return ControlFlow::Continue(Some(Message::Text(msg)));
+            return ControlFlow::Continue(Some(Message::Text(msg.into())));
         }
         Message::Binary(d) => {
             info!(">>> {} sent {} bytes: {:?}", who, d.len(), d);

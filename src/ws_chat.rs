@@ -3,7 +3,7 @@ use std::{collections::HashMap, error::Error, io, net::SocketAddr, sync::Arc, ti
 use axum::{
     extract::{
         connect_info::ConnectInfo,
-        ws::{Message, WebSocket, WebSocketUpgrade},
+        ws::{rejection::WebSocketUpgradeRejection, Message, WebSocket, WebSocketUpgrade},
     },
     response::{Html, IntoResponse, Response},
 };
@@ -15,10 +15,10 @@ use tracing::{debug, info};
 
 static STATE: Lazy<Arc<Mutex<Shared>>> = Lazy::new(|| Arc::new(Mutex::new(Shared::new())));
 
-pub async fn ws_handler(ws: Option<WebSocketUpgrade>, ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Response {
+pub async fn ws_handler(ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>, ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Response {
     match ws {
-        Some(ws) => ws.on_upgrade(move |socket| process(socket, addr).map(|_res| ())).into_response(),
-        None => Html(include_str!("../assets/ws-chat.html")).into_response(),
+        Ok(ws) => ws.on_upgrade(move |socket| process(socket, addr).map(|_res| ())).into_response(),
+        Err(_) => Html(include_str!("../assets/ws-chat.html")).into_response(),
     }
 }
 
@@ -87,7 +87,7 @@ async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> 
             result = peer.socket.next() => Action::ReceiveMessage(result),
         };
         match res {
-            Action::Timeout(()) => peer.socket.send(Message::Ping(vec![])).await?,
+            Action::Timeout(()) => peer.socket.send(Message::Ping(vec![].into())).await?,
             Action::RequireSend(msg) => peer.socket.send(msg).await?,
             Action::ReceiveMessage(result) => match result {
                 Some(Ok(msg)) => {
@@ -98,7 +98,7 @@ async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> 
                             let msg = format!("{username}({addr}): {msg}");
                             state.broadcast(addr, &msg.into()).await;
                         }
-                        Message::Ping(_) => peer.socket.send(Message::Pong(vec![])).await?,
+                        Message::Ping(_) => peer.socket.send(Message::Pong("".into())).await?,
                         Message::Binary(_) => (),
                         Message::Pong(_) => (),
                         Message::Close(_) => break,
