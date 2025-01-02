@@ -2,21 +2,21 @@ use std::{
     collections::BTreeMap,
     net::{Ipv4Addr, SocketAddr},
     str::FromStr,
-    time::{Duration, UNIX_EPOCH},
+    time::{Duration, Instant, UNIX_EPOCH},
 };
 
 use axum::{
     body::{Body, Bytes},
-    extract::{MatchedPath, Path, Query, Request},
+    extract::{MatchedPath, Path, Request},
     http::{header::*, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
     middleware,
-    response::{sse::Event, Html, IntoResponse, Redirect, Response, Sse},
+    response::{sse::Event, AppendHeaders, Html, IntoResponse, Redirect, Response, Sse},
     routing::*,
     Router,
 };
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
-    extract::{cookie, CookieJar, Host},
+    extract::{cookie, CookieJar, Host, Query},
     headers::{
         authorization::{Basic, Bearer},
         Authorization, ContentType, HeaderMapExt, UserAgent,
@@ -105,17 +105,24 @@ fn app() -> Router<()> {
             "/delay/{n}",
             any(anything).layer({
                 async fn delay(Path(delays): Path<u16>, request: Request, next: middleware::Next) -> impl IntoResponse {
+                    let before = Instant::now();
                     tokio::time::sleep(Duration::from_secs(delays.min(10).into())).await;
-                    next.run(request).await
+                    let resp = next.run(request).await;
+                    let after = Instant::now();
+                    (
+                        AppendHeaders([("Server-Timing", format!("delay;dur={}", (after - before).as_millis()))]),
+                        resp,
+                    )
                 }
                 middleware::from_fn(delay)
             }),
         )
         .route("/websocket/echo", any(ws::ws_handler))
         .route("/websocket/chat", any(ws_chat::ws_handler))
-        .route("/socket-io/chat", any( ||async {Html(include_str!("../assets/socketio-chat.html")) } ))
-        /* keep */
-        ;
+        .route(
+            "/socket-io/chat",
+            any(|| async { Html(include_str!("../assets/socketio-chat.html")) }),
+        );
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
@@ -151,6 +158,18 @@ async fn main() {
             debug_span!("request_id", method, matched_path, request_id,)
         }))
         .layer(CorsLayer::very_permissive())
+        .layer({
+            async fn delay(request: Request, next: middleware::Next) -> impl IntoResponse {
+                let before = Instant::now();
+                let resp = next.run(request).await;
+                let after = Instant::now();
+                (
+                    AppendHeaders([("Server-Timing", format!("total;dur={}", (after - before).as_millis()))]),
+                    resp,
+                )
+            }
+            middleware::from_fn(delay)
+        })
         .layer(socket_io_chat::socket_io_layer());
 
     let app = router.layer(service);
@@ -290,15 +309,16 @@ mod cookies {
         ErasedJson::pretty(m)
     }
 
-    pub async fn cookies_set(Query(query): Query<BTreeMap<String, String>>) -> impl IntoResponse {
+    pub async fn cookies_set(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
         let mut jar = CookieJar::new();
-        for (k, v) in query {
+        for (k, mut v) in query {
+            let v = v.swap_remove(v.len() - 1);
             jar = jar.add(cookie::Cookie::new(k, v));
         }
         (StatusCode::FOUND, (jar, Redirect::to("/cookies"))).into_response()
     }
 
-    pub async fn cookies_del(Query(query): Query<BTreeMap<String, String>>) -> impl IntoResponse {
+    pub async fn cookies_del(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
         let mut jar = CookieJar::new();
         for (k, _) in query {
             jar = jar.add(
@@ -315,7 +335,7 @@ mod cookies {
 async fn anything(
     method: Method,
     uri: Uri,
-    Query(query): Query<Vec<(String, String)>>,
+    Query(query): Query<Vec<(String, Vec<String>)>>,
     header_map: HeaderMap,
     content_type: Option<TypedHeader<ContentType>>,
     InsecureClientIp(origin): InsecureClientIp,
@@ -325,9 +345,8 @@ async fn anything(
 
     let mut queries = Queries::default();
     for (k, v) in query {
-        let v = String::from_utf8_lossy(v.as_bytes()).to_string();
-        let values = queries.entry(k.as_str().to_string()).or_default();
-        values.push(v);
+        let vec = queries.entry(k).or_default();
+        vec.extend(v);
     }
 
     let body_string = match std::str::from_utf8(&body) {
@@ -451,10 +470,10 @@ async fn uuid() -> impl IntoResponse {
     })
 }
 
-async fn response_headers(Query(query): Query<BTreeMap<String, String>>) -> impl IntoResponse {
+async fn response_headers(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
     let mut headers = HeaderMap::new();
 
-    for (k, v) in query.iter() {
+    for (k, v) in query.iter().flat_map(|(k, v)| v.iter().map(move |v| (k, v))) {
         if let (Ok(k), Ok(v)) = (HeaderName::from_str(k), HeaderValue::from_str(v)) {
             headers.append(k, v);
         }

@@ -285,7 +285,7 @@ async fn anything() -> Result<()> {
     let response = app()
         .oneshot(
             Request::builder()
-                .uri("/anything")
+                .uri("/anything?a=1&a=2&b=3")
                 .method("POST")
                 .header("X-Real-Ip", "1.2.3.4")
                 .header("content-type", ContentType::form_url_encoded().to_string())
@@ -301,7 +301,13 @@ async fn anything() -> Result<()> {
         body,
         json!(
         {
-          "args": {},
+          "args": {
+            "a": [
+              "1",
+              "2"
+            ],
+            "b": "3"
+          },
           "data": "a=1&b=1&b=2&b=1",
           "files": {},
           "form": {
@@ -319,7 +325,7 @@ async fn anything() -> Result<()> {
           "json": null,
           "method": "POST",
           "origin": "1.2.3.4",
-          "uri": "/anything"
+          "uri": "/anything?a=1&a=2&b=3"
         }
             )
     );
@@ -635,7 +641,7 @@ async fn response_headers() -> Result<()> {
     let response = app()
         .oneshot(
             Request::builder()
-                .uri("/response-headers?key1=value1&key2=value2")
+                .uri("/response-headers?key1=value1&key2=value2&key1=value3")
                 .body(Body::empty())?,
         )
         .await?;
@@ -643,7 +649,7 @@ async fn response_headers() -> Result<()> {
     assert_eq!(response.status(), StatusCode::OK);
 
     let headers = response.headers();
-    assert_eq!(headers.get("key1").unwrap(), "value1");
+    assert_eq!(headers.get_all("key1").iter().collect::<Vec<_>>(), vec!["value1", "value3"]);
     assert_eq!(headers.get("key2").unwrap(), "value2");
     Ok(())
 }

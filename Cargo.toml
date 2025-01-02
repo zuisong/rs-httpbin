@@ -21,7 +21,7 @@ tokio-stream = "0.1"
 minijinja = "2"
 indoc = "2"
 fastrand = "2"
-axum_garde = {version = "0.21", features = ["query"], path = "./axum_garde"}
+axum_garde = {version = "0.21", features = ["axum-extra-query"], path = "./axum_garde"}
 garde = {version = "0.21", features = ["derive"]}
 tower = "0.5"
 tower-http = {version = "0.6", features = ["trace", "cors", "compression-full", "set-header", "request-id", "util"]}
