@@ -57,7 +57,7 @@ default = []
 #openapi-swagger-ui = ["openapi", "utoipa-swagger-ui"]
 
 
-# [workspace]
-# members = [
-#     "axum_garde",
-# ]
+[workspace]
+members = [
+    "axum_garde",
+]

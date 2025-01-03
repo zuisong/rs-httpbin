@@ -178,7 +178,9 @@ dependencies = [
  "axum",
  "axum-extra",
  "garde",
+ "serde",
  "thiserror 2.0.9",
+ "tokio",
 ]
 
 [[package]]

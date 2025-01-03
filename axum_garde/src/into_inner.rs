@@ -58,7 +58,7 @@ impl_into_inner_simple!(axum::extract::State<T>, [T]);
 impl_into_inner_wrapper!(axum_extra::extract::WithRejection<E, T>, E, [T]);
 #[cfg(feature = "axum-extra")]
 impl_into_inner_wrapper!(axum_extra::extract::Cached<T>, T, []);
-#[cfg(feature = "axum-extra-protobuf")]
-impl_into_inner_simple!(axum_extra::protobuf::Protobuf<T>, [T]);
+// #[cfg(feature = "axum-extra-protobuf")]
+// impl_into_inner_simple!(axum_extra::protobuf::Protobuf<T>, [T]);
 #[cfg(feature = "axum-extra-query")]
 impl_into_inner_simple!(axum_extra::extract::Query<T>, [T]);

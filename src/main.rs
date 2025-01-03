@@ -144,9 +144,12 @@ async fn main() {
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "DEBUG".into()))
         .with(layer().json())
         .init();
+    let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 3000)).await.unwrap();
+    start_server(listener).await;
+}
 
+pub(crate) async fn start_server(listener: tokio::net::TcpListener) {
     let router = app();
-
     let service = ServiceBuilder::default()
         .set_x_request_id(MakeRequestUuid)
         .propagate_x_request_id()
@@ -174,7 +177,6 @@ async fn main() {
 
     let app = router.layer(service);
 
-    let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 3000)).await.unwrap();
     eprintln!("Listening on http://{}", listener.local_addr().unwrap());
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
         .await
