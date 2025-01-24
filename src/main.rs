@@ -47,61 +47,79 @@ mod tests;
 fn app() -> Router<()> {
     let mut router = Router::new()
         .route("/", get(index))
-        //
-        .route("/delete", delete(anything))
-        .route("/get", get(anything))
-        .route("/head", head(anything))
-        .route("/options", options(anything))
-        .route("/patch", patch(anything))
-        .route(
-            "/post",
-            post(anything).layer(ServiceBuilder::default().compression().decompression()),
+        .merge(
+            Router::new()
+                .route("/delete", delete(anything))
+                .route("/get", get(anything))
+                .route("/head", head(anything))
+                .route("/options", options(anything))
+                .route("/patch", patch(anything))
+                .route("/post", post(anything))
+                .route("/put", put(anything))
+                .route("/trace", trace(anything)),
         )
-        .route("/put", put(anything))
-        .route("/trace", trace(anything))
+        .merge(
+            Router::new()
+                .route("/anything", any(anything))
+                .route("/anything/{*path}", any(anything)),
+        )
+        .merge(
+            Router::new()
+                .route("/absolute-redirect/{n}", any(redirect::absolute_redirect))
+                .route("/redirect/{n}", any(redirect::redirect))
+                .route("/relative-redirect/{n}", any(redirect::relative_redirect))
+                .route("/redirect-to", any(redirect::redirect_to)),
+        )
+        .merge(
+            Router::new()
+                .route("/basic-auth/{user}/{passwd}", any(basic_auth::basic_auth))
+                .route("/hidden-basic-auth/{user}/{passwd}", any(basic_auth::hidden_basic_auth)),
+        )
+        .merge(
+            Router::new()
+                .route("/user-agent", any(user_agent))
+                .route("/headers", any(headers))
+                .route("/json", get(resp_data::json))
+                .route("/xml", get(resp_data::xml))
+                .route("/forms/post", any(resp_data::forms_post))
+                .route("/html", get(resp_data::html))
+                .route("/hostname", get(hostname))
+                .route("/uuid", any(uuid))
+                .route("/response-headers", any(response_headers))
+                .route("/ip", any(ip))
+                .route("/bearer", any(bearer)),
+        )
+        .merge(
+            Router::new()
+                .route("/image", any(image::image))
+                .route("/image/jpeg", any(image::jpeg))
+                .route("/image/svg", any(image::svg))
+                .route("/image/png", any(image::png))
+                .route("/image/webp", any(image::webp))
+                .route("/image/avif", any(image::avif))
+                .route("/image/jxl", any(image::jxl)),
+        )
         //
-        .route("/anything", any(anything))
-        .route("/anything/{*path}", any(anything))
-        //
-        .route("/absolute-redirect/{n}", any(redirect::absolute_redirect))
-        .route("/redirect/{n}", any(redirect::redirect))
-        .route("/relative-redirect/{n}", any(redirect::relative_redirect))
-        //
-        .route("/basic-auth/{user}/{passwd}", any(basic_auth::basic_auth))
-        .route("/hidden-basic-auth/{user}/{passwd}", any(basic_auth::hidden_basic_auth))
-        //
-        .route("/user-agent", any(user_agent))
-        .route("/headers", any(headers))
-        .route("/json", get(resp_data::json))
-        .route("/xml", get(resp_data::xml))
-        .route("/html", get(resp_data::html))
-        .route("/hostname", get(hostname))
-        .route("/uuid", any(uuid))
-        .route("/response-headers", any(response_headers))
-        .route("/ip", any(ip))
-        .route("/bearer", any(bearer))
-        //
-        .route("/image", any(image::image))
-        .route("/image/jpeg", any(image::jpeg))
-        .route("/image/svg", any(image::svg))
-        .route("/image/png", any(image::png))
-        .route("/image/webp", any(image::webp))
-        .route("/image/avif", any(image::avif))
-        .route("/image/jxl", any(image::jxl))
-        //
-        .route("/base64/{value}", any(base_64::base64_decode))
-        .route("/base64/encode/{value}", any(base_64::base64_encode))
-        .route("/base64/decode/{value}", any(base_64::base64_decode))
-        .route("/forms/post", any(resp_data::forms_post))
+        .merge(
+            Router::new()
+                .route("/base64/{value}", any(base_64::base64_decode))
+                .route("/base64/encode/{value}", any(base_64::base64_encode))
+                .route("/base64/decode/{value}", any(base_64::base64_decode)),
+        )
         .route("/sse", any(sse::sse_handler))
-        .route("/cookies", any(cookies::cookies))
-        .route("/cookies/set", any(cookies::cookies_set))
-        .route("/cookies/delete", any(cookies::cookies_del))
+        .merge(
+            Router::new()
+                .route("/cookies", any(cookies::cookies))
+                .route("/cookies/set", any(cookies::cookies_set))
+                .route("/cookies/delete", any(cookies::cookies_del)),
+        )
         .route("/encoding/utf8", any(utf8))
         .route("/robots.txt", any(robots_txt))
-        .route("/links/{total}", any(links::links))
-        .route("/links/{total}/{page}", any(links::links))
-        .route("/redirect-to", any(redirect::redirect_to))
+        .merge(
+            Router::new()
+                .route("/links/{total}", any(links::links))
+                .route("/links/{total}/{page}", any(links::links)),
+        )
         .route("/unstable", get(unstable))
         .route(
             "/delay/{n}",
@@ -124,6 +142,11 @@ fn app() -> Router<()> {
         .route(
             "/socket-io/chat",
             any(|| async { Html(include_str!("../assets/socketio-chat.html")) }),
+        )
+        .merge(
+            Router::new()
+                .route("/openapi.json", get(|| async { include_str!("../openapi.json") }))
+                .route("/swagger-ui", get(|| async { Html(swagger_ui::swagger_ui_html("/openapi.json")) })),
         );
 
     for format in ["gzip", "zstd", "br", "deflate"] {
@@ -139,6 +162,7 @@ fn app() -> Router<()> {
 }
 
 mod socket_io_chat;
+mod swagger_ui;
 
 #[tokio::main]
 async fn main() {
@@ -306,7 +330,6 @@ fn get_headers(header_map: &HeaderMap) -> Headers {
 }
 
 mod cookies {
-
     use super::*;
 
     pub async fn cookies(jar: CookieJar) -> impl IntoResponse {
@@ -430,8 +453,8 @@ async fn index() -> Html<String> {
     let md = include_str!("../README.md");
     Html(
         markdown::to_html_with_options(md, &markdown::Options::gfm()).unwrap_or_default()
-      // language=html
-      + indoc!(r#"
+            // language=html
+            + indoc!(r#"
 <style>
   @media (prefers-color-scheme: dark) {
     html, img, video, iframe {
