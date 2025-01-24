@@ -1,12 +1,11 @@
 [package]
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.85"
 name = "axum_garde"
 version = "0.21.0"
 build = false
 autobins = false
-autoexamples = false
-autotests = false
+autotests = true
 autobenches = false
 description = "Deprecated in favor of axum-valid"
 readme = "README.md"
@@ -31,7 +30,7 @@ required-features = ["json"]
 [dependencies]
 axum = { version = "0.8", default-features = false }
 axum-extra = { version = "0.10", optional = true, default-features = false }
-garde = { version = "0.21.0", default-features = false }
+garde = { version = "0.22.0", default-features = false }
 thiserror = { version = "2", default-features = false }
 
 
@@ -47,3 +46,4 @@ query = ["axum/query"]
 [dev-dependencies]
 serde = "1"
 tokio = "1"
+

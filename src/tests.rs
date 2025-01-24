@@ -1,4 +1,4 @@
-use std::future::IntoFuture as _;
+use std::{future::IntoFuture as _, net::Ipv4Addr};
 
 use anyhow::{Ok, Result};
 use axum::{
@@ -10,7 +10,8 @@ use futures_util::SinkExt as _;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use serde_json::json;
 use tokio::net::TcpListener;
-use tower::ServiceExt;
+use tokio_stream::StreamExt as _;
+use tower::ServiceExt as _;
 
 use super::*;
 use crate::tests::ext::BodyExt as _;
@@ -163,12 +164,9 @@ async fn the_real_deal() -> Result<()> {
         .await?;
 
     let body = response.body_as_json().await;
-    assert_eq!(
-        body,
-        json! {
-            {"origin": "127.0.0.1"}
-        }
-    );
+    assert_eq!(body, json! {
+        {"origin": "127.0.0.1"}
+    });
     Ok(())
 }
 
@@ -483,12 +481,16 @@ async fn cookies_del() -> Result<()> {
     // assert_eq!(response.status(), StatusCode::FOUND);
 
     let cookies = response.headers().get_all("set-cookie").iter().collect::<Vec<_>>();
-    assert!(cookies
-        .iter()
-        .any(|cookie| cookie.to_str().unwrap().contains("key1=; HttpOnly; Max-Age=0")));
-    assert!(cookies
-        .iter()
-        .any(|cookie| cookie.to_str().unwrap().contains("key2=; HttpOnly; Max-Age=0")));
+    assert!(
+        cookies
+            .iter()
+            .any(|cookie| cookie.to_str().unwrap().contains("key1=; HttpOnly; Max-Age=0"))
+    );
+    assert!(
+        cookies
+            .iter()
+            .any(|cookie| cookie.to_str().unwrap().contains("key2=; HttpOnly; Max-Age=0"))
+    );
     Ok(())
 }
 
@@ -715,7 +717,7 @@ async fn relative_redirect() -> Result<()> {
 #[tokio::test]
 async fn websocket_echo() -> Result<()> {
     use tokio_tungstenite::tungstenite::protocol::Message;
-    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0))).await?;
+    let listener = TcpListener::bind(SocketAddr::from((std::net::Ipv4Addr::UNSPECIFIED, 0))).await?;
     let addr = listener.local_addr()?;
     tokio::spawn(axum::serve(listener, app().into_make_service_with_connect_info::<SocketAddr>()).into_future());
 

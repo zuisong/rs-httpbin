@@ -6,35 +6,34 @@ use std::{
 };
 
 use axum::{
-    body::{Body, Bytes},
-    extract::{MatchedPath, Path, Request},
-    http::{header::*, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri},
-    middleware,
-    response::{sse::Event, AppendHeaders, Html, IntoResponse, Redirect, Response, Sse},
-    routing::*,
     Router,
+    body::{Body, Bytes},
+    extract::{DefaultBodyLimit, MatchedPath, Path, Request},
+    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header::*},
+    middleware,
+    response::{AppendHeaders, Html, IntoResponse, Redirect, Response, Sse, sse::Event},
+    routing::*,
 };
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
-    extract::{cookie, CookieJar, Host, Query},
+    TypedHeader,
+    extract::{CookieJar, Host, Query, cookie},
     headers::{
-        authorization::{Basic, Bearer},
         Authorization, ContentType, HeaderMapExt, UserAgent,
+        authorization::{Basic, Bearer},
     },
     response::ErasedJson,
-    TypedHeader,
 };
 use axum_garde::WithValidation;
-use base64::{prelude::BASE64_STANDARD, Engine};
+use base64::{Engine, prelude::BASE64_STANDARD};
 use garde::Validate;
 use indoc::indoc;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_PLAIN_UTF_8, TEXT_XML};
 use serde::{Deserialize, Serialize};
-use tokio_stream::StreamExt;
 use tower::ServiceBuilder;
-use tower_http::{cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer, ServiceBuilderExt};
+use tower_http::{ServiceBuilderExt, cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer};
 use tracing::debug_span;
-use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt::layer, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::data::{Headers, Http, Queries};
 
@@ -54,7 +53,10 @@ fn app() -> Router<()> {
         .route("/head", head(anything))
         .route("/options", options(anything))
         .route("/patch", patch(anything))
-        .route("/post", post(anything))
+        .route(
+            "/post",
+            post(anything).layer(ServiceBuilder::default().compression().decompression()),
+        )
         .route("/put", put(anything))
         .route("/trace", trace(anything))
         //
@@ -173,7 +175,8 @@ pub(crate) async fn start_server(listener: tokio::net::TcpListener) {
             }
             middleware::from_fn(delay)
         })
-        .layer(socket_io_chat::socket_io_layer());
+        .layer(socket_io_chat::socket_io_layer())
+        .layer(DefaultBodyLimit::disable());
 
     let app = router.layer(service);
 
@@ -666,10 +669,12 @@ mod sse {
     }
 
     pub async fn sse_handler(Query(SeeParam { delay, duration, count }): Query<SeeParam>) -> Response {
+        use tokio_stream::StreamExt as _;
         tokio::time::sleep(delay.unwrap_or(Duration::ZERO)).await;
-
+        let sec = duration.unwrap_or(Duration::from_secs(1)).as_secs_f32();
         let stream = tokio_stream::iter(1..)
             .take(count.unwrap_or(10_usize))
+            .throttle(Duration::from_secs_f32(sec))
             .map(|id| {
                 let timestamp = UNIX_EPOCH.elapsed().unwrap_or_default().as_millis();
                 #[allow(clippy::useless_conversion)]
@@ -677,8 +682,7 @@ mod sse {
                     .data(serde_json::to_string(&data::SseData { id, timestamp }).unwrap_or_default())
                     .event("ping")
                     .try_into()
-            })
-            .throttle(duration.unwrap_or(Duration::from_secs(1)));
+            });
 
         Sse::new(stream).into_response()
     }

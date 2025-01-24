@@ -3,22 +3,25 @@ use std::{net::SocketAddr, ops::ControlFlow, time::Duration};
 use axum::{
     extract::{
         connect_info::ConnectInfo,
-        ws::{rejection::WebSocketUpgradeRejection, CloseFrame, Message, WebSocket, WebSocketUpgrade},
+        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade, rejection::WebSocketUpgradeRejection},
     },
     http::StatusCode,
     response::IntoResponse,
 };
 use axum_extra::response::ErasedJson;
-use futures_util::SinkExt;
 use tokio_util::either::Either;
 use tracing::info;
 
 pub async fn ws_handler(
+    version: axum::http::Version,
     ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
 ) -> impl IntoResponse {
     match ws {
-        Ok(ws) => ws.on_upgrade(move |socket| handle_socket(socket, addr)),
+        Ok(ws) => {
+            tracing::debug!("accepted a WebSocket using {version:?}");
+            ws.on_upgrade(move |socket| handle_socket(socket, addr))
+        }
         Err(WebSocketUpgradeRejection::InvalidUpgradeHeader(_)) => (
             StatusCode::BAD_REQUEST,
             ErasedJson::pretty(crate::data::ErrorDetail::new(
@@ -66,7 +69,6 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
             }
         }
     }
-    let _ignore = socket.close().await;
 
     info!("Websocket context {who} destroyed");
 }

@@ -1,10 +1,10 @@
-use std::sync::{atomic::AtomicUsize, Arc};
+use std::sync::{Arc, atomic::AtomicUsize};
 
 use serde::{Deserialize, Serialize};
 use socketioxide::{
+    SocketIo,
     extract::{Data, Extension, SocketRef, State},
     layer::SocketIoLayer,
-    SocketIo,
 };
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -53,41 +53,46 @@ pub(crate) fn socket_io_layer() -> SocketIoLayer {
     socketio_layer
 }
 
-fn on_connect(s: SocketRef) {
+async fn on_connect(s: SocketRef) {
     s.on(
         "new message",
-        |s: SocketRef, Data::<String>(msg), Extension::<Username>(username)| {
+        |s: SocketRef, Data::<String>(msg), Extension::<Username>(username)| async move {
             let msg = &Res::Message { username, message: msg };
-            s.broadcast().emit("new message", msg).ok();
+            s.broadcast().emit("new message", msg).await.ok();
         },
     );
 
-    s.on("add user", |s: SocketRef, Data::<String>(username), user_cnt: State<UserCnt>| {
-        if s.extensions.get::<Username>().is_some() {
-            return;
-        }
-        let num_users = user_cnt.add_user();
-        s.extensions.insert(Username(username.clone()));
-        s.emit("login", &Res::Login { num_users }).ok();
+    s.on(
+        "add user",
+        |s: SocketRef, Data::<String>(username), user_cnt: State<UserCnt>| async move {
+            if s.extensions.get::<Username>().is_some() {
+                return;
+            }
+            let num_users = user_cnt.add_user();
+            s.extensions.insert(Username(username.clone()));
+            s.emit("login", &Res::Login { num_users }).ok();
 
-        let res = &Res::UserEvent {
-            num_users,
-            username: Username(username),
-        };
-        s.broadcast().emit("user joined", res).ok();
+            let res = &Res::UserEvent {
+                num_users,
+                username: Username(username),
+            };
+            s.broadcast().emit("user joined", res).await.ok();
+        },
+    );
+
+    s.on("typing", |s: SocketRef, Extension::<Username>(username)| async move {
+        s.broadcast().emit("typing", &Res::Username { username }).await.ok();
     });
 
-    s.on("typing", |s: SocketRef, Extension::<Username>(username)| {
-        s.broadcast().emit("typing", &Res::Username { username }).ok();
+    s.on("stop typing", |s: SocketRef, Extension::<Username>(username)| async move {
+        s.broadcast().emit("stop typing", &Res::Username { username }).await.ok();
     });
 
-    s.on("stop typing", |s: SocketRef, Extension::<Username>(username)| {
-        s.broadcast().emit("stop typing", &Res::Username { username }).ok();
-    });
-
-    s.on_disconnect(|s: SocketRef, user_cnt: State<UserCnt>, Extension::<Username>(username)| {
-        let num_users = user_cnt.remove_user();
-        let res = &Res::UserEvent { num_users, username };
-        s.broadcast().emit("user left", res).ok();
-    });
+    s.on_disconnect(
+        |s: SocketRef, user_cnt: State<UserCnt>, Extension::<Username>(username)| async move {
+            let num_users = user_cnt.remove_user();
+            let res = &Res::UserEvent { num_users, username };
+            s.broadcast().emit("user left", res).await.ok();
+        },
+    );
 }

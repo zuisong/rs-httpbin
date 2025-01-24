@@ -1,19 +1,24 @@
-use std::{collections::HashMap, error::Error, io, net::SocketAddr, sync::Arc, time::Duration};
+use std::{
+    collections::HashMap,
+    error::Error,
+    io,
+    net::SocketAddr,
+    sync::{Arc, LazyLock},
+    time::Duration,
+};
 
 use axum::{
     extract::{
         connect_info::ConnectInfo,
-        ws::{rejection::WebSocketUpgradeRejection, Message, WebSocket, WebSocketUpgrade},
+        ws::{Message, WebSocket, WebSocketUpgrade, rejection::WebSocketUpgradeRejection},
     },
     response::{Html, IntoResponse, Response},
 };
-use futures_util::FutureExt as _;
-use once_cell::sync::Lazy;
-use tokio::sync::{mpsc, Mutex};
-use tokio_stream::StreamExt as _;
+use futures_util::{FutureExt as _, StreamExt};
+use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, info};
 
-static STATE: Lazy<Arc<Mutex<Shared>>> = Lazy::new(|| Arc::new(Mutex::new(Shared::new())));
+static STATE: LazyLock<Arc<Mutex<Shared>>> = LazyLock::new(|| Arc::new(Mutex::new(Shared::new())));
 
 pub async fn ws_handler(ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>, ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Response {
     match ws {

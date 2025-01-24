@@ -1,7 +1,8 @@
 [package]
 name = "rs-httpbin"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+rust-version = "1.85"
 
 [dependencies]
 markdown = "1.0.0-alpha.21"
@@ -21,18 +22,17 @@ tokio-stream = "0.1"
 minijinja = "2"
 indoc = "2"
 fastrand = "2"
-axum_garde = {version = "0.21", features = ["axum-extra-query"], path = "./axum_garde"}
-garde = {version = "0.21", features = ["derive"]}
+axum_garde = { features = ["axum-extra-query"], path = "./axum_garde"}
+garde = {version = "0.22", features = ["derive"]}
 tower = "0.5"
-tower-http = {version = "0.6", features = ["trace", "cors", "compression-full", "set-header", "request-id", "util"]}
+tower-http = {version = "0.6", features = ["trace", "cors", "compression-full", "set-header", "request-id", "util", "decompression-full"]}
 multer = "3"
 serde_urlencoded = "0.7"
 uuid = {version = "1.11", features = ["v4", "serde"]}
 derive_more = {version = "1.0.0", features = ["deref_mut", "deref"]}
 tokio-util = "0.7"
-once_cell = "1.20.2"
 futures-util = "0.3.31"
-socketioxide = {version = "0.15.1", features = ["extensions", "state"]}
+socketioxide = {version = "0.16", features = ["extensions", "state"]}
 #utoipa-axum = { version = "0.1.2", optional = true }
 #utoipa = { version = "5.2.0", optional = true }
 #utoipa-swagger-ui = { version = "8.0.3", features = ["axum", "vendored"], optional = true }
@@ -58,6 +58,4 @@ default = []
 
 
 [workspace]
-members = [
-    "axum_garde",
-]
+members = ["axum_garde"]
