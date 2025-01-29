@@ -145,6 +145,14 @@
       }
     },
     "/anything/{anything}": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "anything",
+          "style": "simple"
+        }
+
+      ],
       "get": {
         "tags": [
           "Anything"
