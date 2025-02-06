@@ -181,15 +181,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "axum_garde"
-version = "0.21.0"
+name = "axum-valid"
+version = "0.22.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7d94c3b5f88c87e84355f747eb2e7bed0d1adba3b4071837a96d9667f7cffd6"
 dependencies = [
  "axum",
  "axum-extra",
  "garde",
- "serde",
- "thiserror 2.0.11",
- "tokio",
 ]
 
 [[package]]
@@ -1105,7 +1104,7 @@ dependencies = [
  "axum",
  "axum-client-ip",
  "axum-extra",
- "axum_garde",
+ "axum-valid",
  "base64 0.22.1",
  "derive_more",
  "fastrand",

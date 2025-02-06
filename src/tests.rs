@@ -164,9 +164,12 @@ async fn the_real_deal() -> Result<()> {
         .await?;
 
     let body = response.body_as_json().await;
-    assert_eq!(body, json! {
-        {"origin": "127.0.0.1"}
-    });
+    assert_eq!(
+        body,
+        json! {
+            {"origin": "127.0.0.1"}
+        }
+    );
     Ok(())
 }
 
@@ -730,6 +733,6 @@ async fn websocket_echo() -> Result<()> {
     let response = socket.next().await.unwrap()?;
     assert_eq!(response.into_text()?, format!("echo --> {}", msg));
     socket.send(Message::Close(None)).await?;
-    tokio::time::sleep(std::time::Duration::from_secs_f32(0.01)).await;
+    tokio::time::sleep(Duration::from_secs_f32(0.01)).await;
     Ok(())
 }

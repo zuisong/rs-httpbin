@@ -24,7 +24,7 @@ use axum_extra::{
     },
     response::ErasedJson,
 };
-use axum_garde::WithValidation;
+use axum_valid::Garde;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use garde::Validate;
 use indoc::indoc;
@@ -226,7 +226,7 @@ struct UnstableQueryParam {
     pub failure_rate: Option<f32>,
 }
 
-async fn unstable(WithValidation(query): WithValidation<Query<UnstableQueryParam>>) -> Response {
+async fn unstable(Garde(Query(query)): Garde<Query<UnstableQueryParam>>) -> Response {
     let failure_rate = match query.failure_rate {
         None => 0.5,
         Some(failure_rate @ 0.0..=1.0) => failure_rate,
@@ -648,8 +648,8 @@ mod redirect {
         status_code: Option<u16>,
     }
 
-    pub async fn redirect_to(WithValidation(p): WithValidation<Query<Params>>) -> Response {
-        let Params { url, status_code } = p.into_inner();
+    pub async fn redirect_to(Garde(Query(p)): Garde<Query<Params>>) -> Response {
+        let Params { url, status_code } = p;
         let status_code = status_code.unwrap_or(302);
         (
             StatusCode::from_u16(status_code)
@@ -722,8 +722,8 @@ mod links {
         pub page: Option<u32>,
     }
 
-    pub async fn links(WithValidation(p): WithValidation<Path<LinksParam>>) -> Response {
-        let LinksParam { total, page } = p.into_inner();
+    pub async fn links(Garde(Path(p)): Garde<Path<LinksParam>>) -> Response {
+        let LinksParam { total, page } = p;
 
         let Some(cur) = page else {
             return Redirect::to(format!("/links/{total}/0").as_str()).into_response();

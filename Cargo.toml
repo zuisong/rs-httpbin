@@ -22,7 +22,6 @@ tokio-stream = "0.1"
 minijinja = "2"
 indoc = "2"
 fastrand = "2"
-axum_garde = { features = ["axum-extra-query"], path = "./axum_garde"}
 garde = {version = "0.22", features = ["derive"]}
 tower = "0.5"
 tower-http = {version = "0.6", features = ["trace", "cors", "compression-full", "set-header", "request-id", "util", "decompression-full"]}
@@ -33,6 +32,7 @@ derive_more = {version = "2.0.1", features = ["deref_mut", "deref"]}
 tokio-util = "0.7"
 futures-util = "0.3.31"
 socketioxide = {version = "0.16", features = ["extensions", "state"]}
+axum-valid = { version = "0.22.0", default-features = false, features = ["garde", "extra_query"] }
 
 
 [dev-dependencies]
@@ -50,9 +50,3 @@ codegen-units = 1 # Reduce the number of codegen units to improve optimization.
 
 [features]
 default = []
-#openapi = ["dep:utoipa", "dep:utoipa-axum"]
-#openapi-swagger-ui = ["openapi", "utoipa-swagger-ui"]
-
-
-[workspace]
-members = ["axum_garde"]
