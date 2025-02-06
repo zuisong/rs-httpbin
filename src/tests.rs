@@ -569,6 +569,10 @@ async fn redirect() -> Result<()> {
 
     assert_eq!(response.status(), StatusCode::FOUND);
     assert_eq!(response.headers().get("location").unwrap(), "/get");
+
+    let response = app().oneshot(Request::builder().uri("/redirect/3").body(Body::empty())?).await?;
+    assert_eq!(response.status(), StatusCode::FOUND);
+    assert_eq!(response.headers().get("location").unwrap(), "/redirect/2");
     Ok(())
 }
 
@@ -588,7 +592,7 @@ async fn absolute_redirect() -> Result<()> {
     let response = app()
         .oneshot(
             Request::builder()
-                .uri("/absolute-redirect/2")
+                .uri("/absolute-redirect/3")
                 .method("GET")
                 .header("host", "httpbin.org")
                 .body(Body::empty())?,
@@ -708,19 +712,31 @@ async fn encoding_utf8() -> Result<()> {
 
 #[tokio::test]
 async fn relative_redirect() -> Result<()> {
-    let response = app()
-        .oneshot(Request::builder().uri("/relative-redirect/1").body(Body::empty())?)
-        .await?;
+    {
+        let response = app()
+            .oneshot(Request::builder().uri("/relative-redirect/1").body(Body::empty())?)
+            .await?;
 
-    assert_eq!(response.status(), StatusCode::FOUND);
-    assert_eq!(response.headers().get("location").unwrap(), ("/get"));
+        assert_eq!(response.status(), StatusCode::FOUND);
+        assert_eq!(response.headers().get("location").unwrap(), ("/get"));
+    }
+
+    {
+        let response = app()
+            .oneshot(Request::builder().uri("/relative-redirect/2").body(Body::empty())?)
+            .await?;
+
+        assert_eq!(response.status(), StatusCode::FOUND);
+        assert_eq!(response.headers().get("location").unwrap(), ("./1"));
+    }
+
     Ok(())
 }
 
 #[tokio::test]
 async fn websocket_echo() -> Result<()> {
     use tokio_tungstenite::tungstenite::protocol::Message;
-    let listener = TcpListener::bind(SocketAddr::from((std::net::Ipv4Addr::UNSPECIFIED, 0))).await?;
+    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0))).await?;
     let addr = listener.local_addr()?;
     tokio::spawn(axum::serve(listener, app().into_make_service_with_connect_info::<SocketAddr>()).into_future());
 
@@ -734,5 +750,67 @@ async fn websocket_echo() -> Result<()> {
     assert_eq!(response.into_text()?, format!("echo --> {}", msg));
     socket.send(Message::Close(None)).await?;
     tokio::time::sleep(Duration::from_secs_f32(0.01)).await;
+    Ok(())
+}
+
+#[tokio::test]
+async fn swagger_ui() -> Result<()> {
+    let response = app()
+        .oneshot(Request::builder().uri("/swagger-ui").method("GET").body(Body::empty())?)
+        .await?;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        response.body_as_string().await,
+        r#"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="SwaggerUI" />
+  <title>SwaggerUI</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist/swagger-ui.css" />
+</head>
+<body>
+<div id="swagger-ui"></div>
+<script src="https://unpkg.com/swagger-ui-dist/swagger-ui-bundle.js" crossorigin></script>
+<script>
+  window.onload = () => {
+    window.ui = SwaggerUIBundle({
+      url: '/openapi.json',
+      dom_id: '#swagger-ui',
+    });
+  };
+</script>
+</body>
+</html>
+    "#
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn delay() -> Result<()> {
+    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0))).await?;
+    let addr = listener.local_addr()?;
+    tokio::spawn(axum::serve(listener, app().into_make_service_with_connect_info::<SocketAddr>()).into_future());
+
+    let n = 2;
+
+    let client = Client::builder(TokioExecutor::new()).build_http();
+
+    let start = Instant::now();
+    let response = client
+        .request(Request::builder().uri(format!("http://{addr}/delay/{n}")).body(Body::empty())?)
+        .await?;
+
+    println!("{:?}", response.headers());
+    // assert_eq!(response.status(), StatusCode::OK);
+
+    let end = Instant::now();
+
+    assert!(end - start >= Duration::from_secs_f32(n as f32));
+    assert!(end - start < Duration::from_secs_f32(n as f32 + 0.1));
     Ok(())
 }

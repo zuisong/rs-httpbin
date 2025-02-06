@@ -680,7 +680,7 @@ mod base_64 {
 mod sse {
     use super::*;
 
-    #[derive(Deserialize, Serialize, Default)]
+    #[derive(Deserialize)]
     pub struct SeeParam {
         pub count: Option<usize>,
         #[serde(default)]

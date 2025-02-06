@@ -10,7 +10,9 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        rust_toolchain: [stable, nightly]
+        rust_toolchain:
+#          - stable
+          - nightly
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

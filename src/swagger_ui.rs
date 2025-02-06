@@ -1,6 +1,5 @@
-pub fn swagger_ui_html(api_spec_url: &str) -> String {
-    // language=html
-    let s = r#"
+// language=html
+const SWAGGER_UI_TEMPLATE: &str = r#"
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -25,5 +24,6 @@ pub fn swagger_ui_html(api_spec_url: &str) -> String {
 </html>
     "#;
 
-    s.replace("/openapi.json", api_spec_url)
+pub fn swagger_ui_html(api_spec_url: &str) -> String {
+    SWAGGER_UI_TEMPLATE.replace("/openapi.json", api_spec_url)
 }
