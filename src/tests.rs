@@ -284,18 +284,27 @@ async fn anything() -> Result<()> {
     let response = app()
         .oneshot(
             Request::builder()
-                .uri("/anything?a=1&a=2&b=3")
+                .uri(format!(
+                    "/anything?{}",
+                    form_urlencoded::Serializer::new(String::new())
+                        .extend_pairs(&[("a", "1"), ("a", "2"), ("b", "3"), ("你好", "世界"),])
+                        .finish()
+                ))
                 .method("POST")
                 .header("X-Real-Ip", "1.2.3.4")
                 .header("content-type", ContentType::form_url_encoded().to_string())
-                .body(http_body_util::Full::from("a=1&b=1&b=2&b=1"))?,
+                .body(http_body_util::Full::from(
+                    form_urlencoded::Serializer::new(String::new())
+                        .extend_pairs(&[("a", "1"), ("b", "1"), ("b", "2"), ("b", "1"), ("你好", "世界")])
+                        .finish(),
+                ))?,
         )
         .await?;
     assert_eq!(response.status(), StatusCode::OK);
     let body = response.body_as_json().await;
     println!("{:#?}", &body);
     assert_eq!(body["origin"], json!("1.2.3.4"));
-    assert_eq!(body["form"], json!(  {"a":"1", "b":["1","2","1"]}   ));
+    assert_eq!(body["form"], json!(  {"a":"1", "b":["1","2","1"], "你好":"世界"}   ));
     assert_eq!(
         body,
         json!(
@@ -305,9 +314,10 @@ async fn anything() -> Result<()> {
               "1",
               "2"
             ],
-            "b": "3"
+            "b": "3",
+            "你好": "世界"
           },
-          "data": "a=1&b=1&b=2&b=1",
+          "data": "a=1&b=1&b=2&b=1&%E4%BD%A0%E5%A5%BD=%E4%B8%96%E7%95%8C",
           "files": {},
           "form": {
             "a": "1",
@@ -315,7 +325,8 @@ async fn anything() -> Result<()> {
               "1",
               "2",
               "1"
-            ]
+            ],
+            "你好": "世界"
           },
           "headers": {
             "content-type": "application/x-www-form-urlencoded",
@@ -324,7 +335,7 @@ async fn anything() -> Result<()> {
           "json": null,
           "method": "POST",
           "origin": "1.2.3.4",
-          "uri": "/anything?a=1&a=2&b=3"
+          "uri": "/anything?a=1&a=2&b=3&%E4%BD%A0%E5%A5%BD=%E4%B8%96%E7%95%8C"
         }
             )
     );
@@ -368,20 +379,24 @@ Content-Disposition: form-data; name="c"
     Ok(())
 }
 
+#[test_case::test_case("deflate")]
+#[test_case::test_case("gzip")]
+#[test_case::test_case("br")]
+#[test_case::test_case("zstd")]
 #[tokio::test]
-async fn test_zstd() -> Result<()> {
-    let response = app()
-        .oneshot(
-            Request::builder()
-                .uri("/zstd")
-                .method("GET")
-                .header("X-Real-Ip", "1.2.3.4")
-                .header("Content-Type", "application/json")
-                .body(http_body_util::Full::default())?,
-        )
+async fn test_compress_response(format: &str) -> Result<()> {
+    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0))).await?;
+    let addr = listener.local_addr()?;
+    tokio::spawn(axum::serve(listener, app().into_make_service_with_connect_info::<SocketAddr>()).into_future());
+
+    let client = Client::builder(TokioExecutor::new()).build_http();
+
+    let response = client
+        .request(Request::builder().uri(format!("http://{addr}/{format}")).body(Body::empty())?)
         .await?;
-    // assert_eq!(response.status(), StatusCode::OK);
-    println!("{}", response.body_as_string().await);
+
+    assert_eq!(response.status(), StatusCode::OK);
+
     Ok(())
 }
 

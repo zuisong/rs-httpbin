@@ -27,13 +27,16 @@ use axum_extra::{
 use axum_valid::Garde;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use garde::Validate;
-use indoc::indoc;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_PLAIN_UTF_8, TEXT_XML};
 use serde::{Deserialize, Serialize};
 use tower::ServiceBuilder;
-use tower_http::{ServiceBuilderExt, cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer, trace::TraceLayer};
+use tower_http::{
+    ServiceBuilderExt, compression::CompressionLayer, cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer,
+    trace::TraceLayer,
+};
 use tracing::debug_span;
 use tracing_subscriber::{EnvFilter, fmt::layer, layer::SubscriberExt, util::SubscriberInitExt};
+use uuid::Uuid;
 
 use crate::data::{Headers, Http, Queries};
 
@@ -152,7 +155,11 @@ fn app() -> Router<()> {
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
             format!("/{format}").as_str(),
-            get(anything).layer(SetRequestHeaderLayer::overriding(ACCEPT_ENCODING, HeaderValue::from_static(format))),
+            get(anything).layer(
+                ServiceBuilder::default()
+                    .layer(SetRequestHeaderLayer::overriding(ACCEPT_ENCODING, HeaderValue::from_static(format)))
+                    .layer(CompressionLayer::new()),
+            ),
         );
     }
 
@@ -177,9 +184,9 @@ async fn main() {
 pub(crate) async fn start_server(listener: tokio::net::TcpListener) {
     let router = app();
     let service = ServiceBuilder::default()
+        .compression()
         .set_x_request_id(MakeRequestUuid)
         .propagate_x_request_id()
-        .compression()
         .layer(TraceLayer::new_for_http().make_span_with(|request: &Request<Body>| {
             let request_id = request.headers()["x-request-id"].to_str().ok();
             let matched_path = request.extensions().get::<MatchedPath>().map(MatchedPath::as_str);
@@ -393,9 +400,9 @@ async fn anything(
         match (mime.type_(), mime.subtype()) {
             (mime::APPLICATION, mime::JSON) => json = serde_json::from_slice(&body).ok(),
             (mime::APPLICATION, mime::WWW_FORM_URLENCODED) => {
-                let f: Vec<(String, String)> = serde_urlencoded::from_bytes(body.as_ref()).unwrap_or_default();
+                let f = form_urlencoded::parse(&body);
                 for (k, v) in f {
-                    form.entry(k).or_default().push(v);
+                    form.entry(k.to_string()).or_default().push(v.to_string());
                 }
             }
             (mime::MULTIPART, mime::FORM_DATA) => {
@@ -454,7 +461,7 @@ async fn index() -> Html<String> {
     Html(
         markdown::to_html_with_options(md, &markdown::Options::gfm()).unwrap_or_default()
             // language=html
-            + indoc!(r#"
+            + indoc::indoc!(r#"
 <style>
   @media (prefers-color-scheme: dark) {
     html, img, video, iframe {
@@ -488,13 +495,13 @@ async fn utf8() -> impl IntoResponse {
 }
 
 #[derive(Deserialize, Serialize, Default)]
-struct Uuid {
+struct UUID {
     uuid: String,
 }
 
 async fn uuid() -> impl IntoResponse {
-    ErasedJson::pretty(Uuid {
-        uuid: uuid::Uuid::new_v4().to_string(),
+    ErasedJson::pretty(UUID {
+        uuid: Uuid::new_v4().to_string(),
     })
 }
 

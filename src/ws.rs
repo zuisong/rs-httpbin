@@ -9,7 +9,6 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::response::ErasedJson;
-use tokio_util::either::Either;
 use tracing::info;
 
 pub async fn ws_handler(
@@ -33,6 +32,11 @@ pub async fn ws_handler(
             .into_response(),
         Err(e) => e.into_response(),
     }
+}
+
+enum Either<L, R> {
+    Left(L),
+    Right(R),
 }
 
 async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
