@@ -8,8 +8,8 @@ version = "0.1.0"
 axum = {version = "0.8", default-features = false, features = ["http2", "tower-log", "matched-path", "ws"]}
 axum-client-ip = "0.7.0"
 axum-extra = {version = "0.10.0", features = ["typed-header", "erased-json", "query", "cookie"]}
-axum-valid = {version = "0.22.0", default-features = false, features = ["garde", "extra_query"]}
-base64 = "~0.22"
+axum-valid = {version = "0.23.0", default-features = false, features = ["garde", "extra_query"]}
+base64 = "0.22"
 derive_more = {version = "2.0.1", features = ["deref_mut", "deref"]}
 fastrand = "2"
 form_urlencoded = "1.2.1"
@@ -31,7 +31,7 @@ tower = "0.5"
 tower-http = {version = "0.6", features = ["trace", "cors", "compression-full", "set-header", "request-id", "util", "decompression-full"]}
 tracing = "0.1"
 tracing-subscriber = {version = "0.3", default-features = false, features = ["env-filter", "json", "fmt"]}
-uuid = {version = "1.13", features = ["v4", "serde"]}
+uuid = {version = "1.14", features = ["v4", "serde"]}
 
 [dev-dependencies]
 anyhow = "1"
@@ -42,7 +42,7 @@ tokio-tungstenite = "^0.26"
 
 [profile.release]
 codegen-units = 1 # Reduce the number of codegen units to improve optimization.
-lto = true
+lto = true 
 opt-level = "s" # Optimize for size.
 strip = true # Automatically strip symbols from the binary.
 
