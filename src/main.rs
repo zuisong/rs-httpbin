@@ -482,10 +482,7 @@ struct HostName {
 }
 
 async fn hostname() -> impl IntoResponse {
-    let hostname = hostname::get()
-        .ok()
-        .and_then(|h| h.into_string().ok())
-        .unwrap_or("<< unknown hostname >>".to_string());
+    let hostname = whoami::hostname().unwrap_or("<< unknown hostname >>".to_string());
 
     ErasedJson::pretty(HostName { hostname })
 }
