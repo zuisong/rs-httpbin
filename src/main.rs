@@ -2,7 +2,7 @@ use std::{
     collections::BTreeMap,
     net::{Ipv4Addr, SocketAddr},
     str::FromStr,
-    time::{Duration, Instant, UNIX_EPOCH},
+    time::{Duration, Instant},
 };
 
 use axum::{
@@ -492,12 +492,12 @@ async fn utf8() -> impl IntoResponse {
 }
 
 #[derive(Deserialize, Serialize, Default)]
-struct UUID {
+struct UuidResponse {
     uuid: String,
 }
 
 async fn uuid() -> impl IntoResponse {
-    ErasedJson::pretty(UUID {
+    ErasedJson::pretty(UuidResponse {
         uuid: Uuid::new_v4().to_string(),
     })
 }
@@ -682,28 +682,28 @@ mod base_64 {
 }
 
 mod sse {
+    use jiff::SignedDuration;
+
     use super::*;
 
     #[derive(Deserialize)]
     pub struct SeeParam {
         pub count: Option<usize>,
         #[serde(default)]
-        #[serde(with = "humantime_serde")]
-        pub duration: Option<Duration>,
+        pub duration: Option<SignedDuration>,
         #[serde(default)]
-        #[serde(with = "humantime_serde")]
-        pub delay: Option<Duration>,
+        pub delay: Option<SignedDuration>,
     }
 
     pub async fn sse_handler(Query(SeeParam { delay, duration, count }): Query<SeeParam>) -> Response {
         use tokio_stream::StreamExt as _;
-        tokio::time::sleep(delay.unwrap_or(Duration::ZERO)).await;
-        let sec = duration.unwrap_or(Duration::from_secs(1)).as_secs_f32();
+        tokio::time::sleep(delay.unwrap_or(SignedDuration::ZERO).unsigned_abs()).await;
+        let sec = duration.unwrap_or(SignedDuration::from_secs(1)).unsigned_abs().as_secs_f32();
         let stream = tokio_stream::iter(1..)
             .take(count.unwrap_or(10_usize))
             .throttle(Duration::from_secs_f32(sec))
             .map(|id| {
-                let timestamp = UNIX_EPOCH.elapsed().unwrap_or_default().as_millis();
+                let timestamp = jiff::Timestamp::now().as_millisecond();
                 #[allow(clippy::useless_conversion)]
                 Event::default()
                     .data(serde_json::to_string(&data::SseData { id, timestamp }).unwrap_or_default())

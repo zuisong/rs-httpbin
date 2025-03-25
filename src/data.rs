@@ -62,7 +62,7 @@ pub struct Http {
 #[derive(Serialize)]
 pub struct SseData {
     pub id: i32,
-    pub timestamp: u128,
+    pub timestamp: i64,
 }
 
 #[derive(Serialize, Debug)]

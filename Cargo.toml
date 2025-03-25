@@ -15,8 +15,8 @@ fastrand = "2"
 form_urlencoded = "1.2.1"
 futures-util = "0.3.31"
 garde = {version = "0.22", features = ["derive"]}
-humantime-serde = "1"
 indoc = "2"
+jiff = { version = "0.2.5", default-features = false, features = ["serde", "std"] }
 markdown = "1.0.0-alpha.23"
 mime = "0.3"
 minijinja = "2"
