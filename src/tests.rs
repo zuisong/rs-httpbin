@@ -379,6 +379,27 @@ Content-Disposition: form-data; name="c"
     Ok(())
 }
 
+#[tokio::test]
+async fn test_anything_binary() -> Result<()> {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/anything")
+                .method("POST")
+                .header("X-Real-Ip", "1.2.3.4")
+                .header("Content-Type", "application/octet-stream")
+                .body(http_body_util::Full::from(vec![0xfe]))?,
+        )
+        .await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.body_as_json().await;
+    println!("{:#?}", &body);
+    assert_eq!(body["origin"], json!("1.2.3.4"));
+    assert_eq!(body["data"], json!("/g=="));
+
+    Ok(())
+}
+
 #[test_case::test_case("deflate")]
 #[test_case::test_case("gzip")]
 #[test_case::test_case("br")]
@@ -556,6 +577,19 @@ async fn unstable() -> Result<()> {
 
     // assert_eq!(response.status(), StatusCode::BAD_REQUEST);
     assert!(response.body_as_string().await.contains("not in range [0, 1]"));
+
+    // Test the unstable endpoint with a failure rate of 0.5
+    let mut success_count = 0;
+    for _ in 0..1000 {
+        let response = app().oneshot(Request::builder().uri("/unstable").body(Body::empty())?).await?;
+        if response.status() == StatusCode::OK {
+            success_count += 1;
+        }
+    }
+    dbg!(success_count);
+    // Check that the success count is within a reasonable range
+    assert!(success_count >= 450 && success_count <= 550);
+
     Ok(())
 }
 
