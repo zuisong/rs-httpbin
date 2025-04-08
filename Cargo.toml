@@ -24,7 +24,7 @@ multer = "3"
 serde = {version = "1", features = ["derive"]}
 serde_json = "1"
 socketioxide = {version = "0.16", features = ["extensions", "state"]}
-tokio = {version = "1.43", features = ["rt-multi-thread"]}
+tokio = {version = "1.44", features = ["rt-multi-thread"]}
 tokio-stream = "0.1"
 tower = "0.5"
 tower-http = {version = "0.6", features = ["trace", "cors", "compression-full", "set-header", "request-id", "util", "decompression-full"]}
