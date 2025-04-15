@@ -14,8 +14,9 @@ jobs:
       fail-fast: false
       matrix:
         os:
+          - windows-11-arm
+          - windows-latest
           - ubuntu-latest
-          #          - windows-latest
           - macOS-latest
         rust_toolchain:
           - stable
@@ -23,22 +24,24 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      
-      - uses: moonrepo/setup-rust@v1
+
+      - uses: hecrj/setup-rust-action@v2
         with:
-          channel: ${{ matrix.rust_toolchain }}
-          bins: cargo-llvm-cov
-      
+          rust-version: ${{ matrix.rust_toolchain }}
+      - uses: baptiste0928/cargo-install@v3
+        with:
+          crate: cargo-llvm-cov
+
       - name: Generate code coverage
         run: cargo llvm-cov test --all-features --workspace --lcov --output-path lcov.info
-      
+
       - name: Build
         run: cargo build --verbose
-      
+
       - name: Coveralls
         if: matrix.os == 'ubuntu-latest' && matrix.rust_toolchain == 'nightly'
         uses: coverallsapp/github-action@v2.1.0
-  
+
   build-image:
     runs-on: ubuntu-latest
     steps:

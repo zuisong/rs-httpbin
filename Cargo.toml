@@ -50,4 +50,4 @@ strip = true # Automatically strip symbols from the binary.
 default = []
 
 [patch.crates-io]
-state = {git = "https://github.com/zuisong/state", branch = "loom-as-dev-dep", version = "0.6.0", public = true}
+state = {git = "https://github.com/zuisong/state", branch = "loom-as-dev-dep", version = "0.6.0"}
