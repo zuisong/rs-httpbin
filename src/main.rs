@@ -165,24 +165,6 @@ fn app() -> Router<()> {
 
     // router.merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", api))
 
-    router
-}
-
-mod socket_io_chat;
-mod swagger_ui;
-
-#[tokio::main]
-async fn main() {
-    tracing_subscriber::registry()
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "DEBUG".into()))
-        .with(layer().json())
-        .init();
-    let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 3000)).await.unwrap();
-    start_server(listener).await;
-}
-
-pub(crate) async fn start_server(listener: tokio::net::TcpListener) {
-    let router = app();
     let service = ServiceBuilder::default()
         .compression()
         .set_x_request_id(MakeRequestUuid)
@@ -210,7 +192,24 @@ pub(crate) async fn start_server(listener: tokio::net::TcpListener) {
         .layer(DefaultBodyLimit::disable());
 
     let app = router.layer(service);
+    app
+}
 
+mod socket_io_chat;
+mod swagger_ui;
+
+#[tokio::main]
+async fn main() {
+    tracing_subscriber::registry()
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| "DEBUG".into()))
+        .with(layer().json())
+        .init();
+    let listener = tokio::net::TcpListener::bind((Ipv4Addr::UNSPECIFIED, 3000)).await.unwrap();
+    start_server(listener).await;
+}
+
+pub(crate) async fn start_server(listener: tokio::net::TcpListener) {
+    let app = app();
     eprintln!("Listening on http://{}", listener.local_addr().unwrap());
     axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
         .await

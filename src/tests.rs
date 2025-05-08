@@ -13,6 +13,7 @@ use tokio::net::TcpListener;
 use tokio_stream::StreamExt as _;
 use tower::ServiceExt as _;
 
+// use pretty_assertions::{assert_eq, assert_ne};
 use super::*;
 use crate::tests::ext::BodyExt as _;
 
@@ -301,10 +302,11 @@ async fn anything() -> Result<()> {
         )
         .await?;
     assert_eq!(response.status(), StatusCode::OK);
-    let body = response.body_as_json().await;
+    let mut body = response.body_as_json().await;
     println!("{:#?}", &body);
     assert_eq!(body["origin"], json!("1.2.3.4"));
     assert_eq!(body["form"], json!(  {"a":"1", "b":["1","2","1"], "你好":"世界"}   ));
+    body["headers"].as_object_mut().unwrap().remove("x-request-id");
     assert_eq!(
         body,
         json!(
@@ -588,7 +590,7 @@ async fn unstable() -> Result<()> {
     }
     dbg!(success_count);
     // Check that the success count is within a reasonable range
-    assert!(success_count >= 450 && success_count <= 550);
+    assert!((450..=550).contains(&success_count));
 
     Ok(())
 }
