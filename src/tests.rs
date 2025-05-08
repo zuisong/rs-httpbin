@@ -515,6 +515,7 @@ async fn cookies_del() -> Result<()> {
             Request::builder()
                 .method("GET")
                 .uri("/cookies/delete?key1=value1&key2=value2")
+                .header("Cookie", "key1=a;key2=b")
                 .body(Body::empty())?,
         )
         .await?;
@@ -522,16 +523,8 @@ async fn cookies_del() -> Result<()> {
     // assert_eq!(response.status(), StatusCode::FOUND);
 
     let cookies = response.headers().get_all("set-cookie").iter().collect::<Vec<_>>();
-    assert!(
-        cookies
-            .iter()
-            .any(|cookie| cookie.to_str().unwrap().contains("key1=; HttpOnly; Max-Age=0"))
-    );
-    assert!(
-        cookies
-            .iter()
-            .any(|cookie| cookie.to_str().unwrap().contains("key2=; HttpOnly; Max-Age=0"))
-    );
+    assert!(cookies.iter().any(|cookie| cookie.to_str().unwrap().contains("key1=; Max-Age=0")));
+    assert!(cookies.iter().any(|cookie| cookie.to_str().unwrap().contains("key2=; Max-Age=0")));
     Ok(())
 }
 

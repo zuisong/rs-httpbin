@@ -352,20 +352,14 @@ mod cookies {
         (StatusCode::FOUND, (jar, Redirect::to("/cookies"))).into_response()
     }
 
-    pub async fn cookies_del(Query(query): Query<BTreeMap<String, Vec<String>>>) -> impl IntoResponse {
-        let mut jar = CookieJar::new();
+    pub async fn cookies_del(Query(query): Query<BTreeMap<String, Vec<String>>>, mut jar: CookieJar) -> impl IntoResponse {
         for (k, _) in query {
-            jar = jar.add(
-                cookie::Cookie::build((k, ""))
-                    .max_age(std::time::Duration::ZERO.try_into().unwrap_or_default())
-                    .expires(Some(std::time::SystemTime::now().into()))
-                    .http_only(true)
-                    .build(),
-            );
+            jar = jar.remove(cookie::Cookie::from(k));
         }
         (StatusCode::FOUND, (jar, Redirect::to("/cookies")))
     }
 }
+
 async fn anything(
     method: Method,
     uri: Uri,
