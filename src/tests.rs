@@ -8,12 +8,14 @@ use axum::{
 use base64::prelude::BASE64_STANDARD;
 use futures_util::SinkExt as _;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
+#[allow(unused_imports)]
+#[cfg(feature = "pretty_assertions")]
+use pretty_assertions::{assert_eq, assert_ne};
 use serde_json::json;
 use tokio::net::TcpListener;
 use tokio_stream::StreamExt as _;
 use tower::ServiceExt as _;
 
-// use pretty_assertions::{assert_eq, assert_ne};
 use super::*;
 use crate::tests::ext::BodyExt as _;
 
@@ -831,6 +833,44 @@ async fn swagger_ui() -> Result<()> {
 </html>
     "#
     );
+    Ok(())
+}
+
+#[tokio::test]
+async fn cache_without_conditional_headers() -> Result<()> {
+    let response = app().oneshot(Request::builder().uri("/cache").body(Body::empty())?).await?;
+
+    assert_eq!(response.status(), StatusCode::OK);
+    Ok(())
+}
+
+#[tokio::test]
+async fn cache_with_if_modified_since() -> Result<()> {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/cache")
+                .header(IF_MODIFIED_SINCE, "Wed, 21 Oct 2015 07:28:00 GMT")
+                .body(Body::empty())?,
+        )
+        .await?;
+
+    assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+    Ok(())
+}
+
+#[tokio::test]
+async fn cache_with_if_none_match() -> Result<()> {
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri("/cache")
+                .header(IF_NONE_MATCH, "\"abc123\"")
+                .body(Body::empty())?,
+        )
+        .await?;
+
+    assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
     Ok(())
 }
 

@@ -146,6 +146,7 @@ fn app() -> Router<()> {
             "/socket-io/chat",
             any(|| async { Html(include_str!("../assets/socketio-chat.html")) }),
         )
+        .route("/cache", any(cache))
         .merge(
             Router::new()
                 .route("/openapi.json", get(|| async { include_str!("../openapi.json") }))
@@ -191,8 +192,7 @@ fn app() -> Router<()> {
         .layer(socket_io_chat::socket_io_layer())
         .layer(DefaultBodyLimit::disable());
 
-    let app = router.layer(service);
-    app
+    router.layer(service)
 }
 
 mod socket_io_chat;
@@ -577,6 +577,17 @@ mod image {
 
 async fn ip(InsecureClientIp(origin): InsecureClientIp) -> impl IntoResponse {
     ErasedJson::pretty(data::Ip { origin })
+}
+
+async fn cache(headers: HeaderMap) -> impl IntoResponse {
+    // 检查请求头中是否包含 If-Modified-Since 或 If-None-Match
+    if headers.contains_key(IF_MODIFIED_SINCE) || headers.contains_key(IF_NONE_MATCH) {
+        // 如果包含这些头部，返回 304 Not Modified
+        StatusCode::NOT_MODIFIED.into_response()
+    } else {
+        // 否则返回 200 OK
+        StatusCode::OK.into_response()
+    }
 }
 
 #[derive(Serialize, Deserialize)]

@@ -24,7 +24,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/bearer](/bearer) Checks Bearer token header - returns 401 if not set.
 - [x] [/br](/br) Returns brotli-encoded data.
 - [ ] /bytes/:n Generates n random bytes of binary data, accepts optional seed integer parameter.
-- [ ] /cache Returns 200 unless an If-Modified-Since or If-None-Match header is provided, when it returns a 304.
+- [x] /cache Returns 200 unless an If-Modified-Since or If-None-Match header is provided, when it returns a 304.
 - [ ] /cache/:n Sets a Cache-Control header for n seconds.
 - [x] [/cookies](/cookies) Returns cookie data.
 - [x] [/cookies/delete?name](/cookies/delete?k1=&k2=) Deletes one or more simple cookies.
