@@ -80,7 +80,7 @@ async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> 
     let mut peer = Peer::new(state.clone(), lines, addr).await?;
     {
         let mut state = state.lock().await;
-        let msg = format!("{} has joined the chat", username);
+        let msg = format!("{username} has joined the chat");
         info!("{}", msg);
         state.broadcast(addr, &msg.into()).await;
     }
@@ -120,7 +120,7 @@ async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> 
         let mut state = state.lock().await;
         state.peers.remove(&addr);
 
-        let msg = format!("{} has left the chat", username);
+        let msg = format!("{username} has left the chat");
         tracing::info!("{}", msg);
         state.broadcast(addr, &msg.into()).await;
     }

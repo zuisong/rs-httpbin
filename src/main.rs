@@ -6,7 +6,7 @@ use std::{
 };
 
 use axum::{
-    Router,
+    Json, Router,
     body::{Body, Bytes},
     extract::{DefaultBodyLimit, MatchedPath, Path, Request},
     http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header::*},
@@ -151,7 +151,9 @@ fn app() -> Router<()> {
             Router::new()
                 .route("/openapi.json", get(|| async { include_str!("../openapi.json") }))
                 .route("/swagger-ui", get(|| async { Html(swagger_ui::swagger_ui_html("/openapi.json")) })),
-        );
+        )
+        // 新增 /status/:code 路由
+        .route("/status/{code}", any(status_code_handler));
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
@@ -768,4 +770,22 @@ r#"
             .unwrap_or_default();
         Html(html).into_response()
     }
+}
+
+// 新增 handler
+async fn status_code_handler(Path(code): Path<u16>) -> Response {
+    if let Ok(status) = StatusCode::from_u16(code) {
+        return status.into_response();
+    }
+    (
+        StatusCode::BAD_REQUEST,
+        Json(serde_json::json!(
+        {
+            "status_code": 400,
+            "error": "Bad Request",
+            "detail": format!("invalid status code: {code} not in range [100, 999]")
+        }
+        )),
+    )
+        .into_response()
 }

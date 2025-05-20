@@ -1,8 +1,11 @@
-app = 'rs-httpbin'
-primary_region = 'lax'
+app = "rs-httpbin"
+primary_region = "lax"
 
 [build]
-dockerfile = 'Dockerfile'
+dockerfile = "Dockerfile"
+
+[deploy]
+strategy = "bluegreen"
 
 [http_service]
 internal_port = 3000
@@ -10,14 +13,23 @@ force_https = true
 auto_stop_machines = "suspend"
 auto_start_machines = true
 min_machines_running = 0
-processes = ['app']
 
 [http_service.concurrency]
-type = 'requests'
+type = "requests"
 hard_limit = 250
 soft_limit = 200
 
+[http_service.http_options]
+h2_backend = true
+
+[[http_service.checks]]
+grace_period = "10s"
+interval = "30s"
+method = "GET"
+timeout = "5s"
+path = "/"
+
 [[vm]]
-memory = '256MB'
-cpu_kind = 'shared'
+memory = "256MB"
+cpu_kind = "shared"
 cpus = 1

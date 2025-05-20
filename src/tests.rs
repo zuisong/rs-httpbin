@@ -798,7 +798,7 @@ mod ws {
         });
         // 等待服务启动
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        let url = format!("ws://{}/websocket/echo?max_fragment_size=2048&max_message_size=10240", local_addr);
+        let url = format!("ws://{local_addr}/websocket/echo?max_fragment_size=2048&max_message_size=10240");
 
         let (mut ws_stream, _) = connect_async_with_config(url, None, false).await.unwrap();
         ws_stream.send(WsMessage::Text("hello ws".into())).await.unwrap();
@@ -820,7 +820,7 @@ mod ws {
         });
         // 等待服务启动
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        let url = format!("ws://{}/websocket/echo?max_fragment_size=2048&max_message_size=10240", local_addr);
+        let url = format!("ws://{local_addr}/websocket/echo?max_fragment_size=2048&max_message_size=10240");
 
         let (mut ws_stream, _) = connect_async_with_config(url, None, false).await.unwrap();
         ws_stream.send(WsMessage::Text("a".repeat(2049).into())).await.unwrap();
@@ -929,4 +929,47 @@ async fn delay() -> Result<()> {
     assert!(end - start >= Duration::from_secs_f32(n as f32));
     assert!(end - start < Duration::from_secs_f32(n as f32 + 0.1));
     Ok(())
+}
+
+#[tokio::test]
+async fn test_status_code_handler() {
+    let app = app();
+    // 测试 200
+    let response = app
+        .clone()
+        .oneshot(Request::builder().uri("/status/200").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    // 测试 404
+    let response = app
+        .clone()
+        .oneshot(Request::builder().uri("/status/404").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    // 测试 500
+    let response = app
+        .clone()
+        .oneshot(Request::builder().uri("/status/500").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    // 测试非法 code，应该返回 500
+    let response = app
+        .clone()
+        .oneshot(Request::builder().uri("/status/9999").body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    assert_eq!(
+        response.body_as_json().await,
+        json!(
+        {
+            "status_code": 400,
+            "error": "Bad Request",
+            "detail": "invalid status code: 9999 not in range [100, 999]"
+        }
+            )
+    );
 }
