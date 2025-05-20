@@ -3,22 +3,39 @@ use std::{net::SocketAddr, ops::ControlFlow, time::Duration};
 use axum::{
     extract::{
         connect_info::ConnectInfo,
-        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade, rejection::WebSocketUpgradeRejection},
+        ws::{CloseFrame, Message, WebSocket, WebSocketUpgrade, close_code, rejection::WebSocketUpgradeRejection},
     },
     http::StatusCode,
     response::IntoResponse,
 };
-use axum_extra::response::ErasedJson;
+use axum_extra::{extract::Query, response::ErasedJson};
+use serde::{Deserialize, Serialize};
 use tracing::info;
 
-pub async fn ws_handler(
+#[derive(Deserialize, Serialize)]
+pub struct EchoConfig {
+    max_fragment_size: Option<usize>,
+    max_message_size: Option<usize>,
+}
+
+pub async fn ws_echo_handler(
     version: axum::http::Version,
     ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
     ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    Query(params): Query<EchoConfig>,
 ) -> impl IntoResponse {
     match ws {
         Ok(ws) => {
             tracing::debug!("accepted a WebSocket using {version:?}");
+
+            let mut ws = ws;
+            if let Some(size) = params.max_fragment_size {
+                ws = ws.max_frame_size(size);
+            }
+            if let Some(size) = params.max_message_size {
+                ws = ws.max_message_size(size);
+            }
+
             ws.on_upgrade(move |socket| handle_socket(socket, addr))
         }
         Err(WebSocketUpgradeRejection::InvalidUpgradeHeader(_)) => (
@@ -55,9 +72,16 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
                 }
                 break;
             }
+            Either::Right(None) => break,
             Either::Right(Some(Ok(msg))) => msg,
-            Either::Right(_) => {
-                info!("client {who} abruptly disconnected");
+            Either::Right(Some(Err(e))) => {
+                info!("Could not receive msg due to {e}, client {who} abruptly disconnected");
+                let _ = socket
+                    .send(Message::Close(Some(CloseFrame {
+                        code: close_code::ERROR,
+                        reason: format!("{e:?}").into(),
+                    })))
+                    .await;
                 break;
             }
         };
@@ -80,8 +104,9 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
 fn process_message(msg: Message, who: SocketAddr) -> ControlFlow<(), Option<Message>> {
     match msg {
         Message::Text(t) => {
-            let msg = format!("echo --> {t}");
-            return ControlFlow::Continue(Some(Message::Text(msg.into())));
+            let msg = format!("{t}");
+            info!(">>> {who} sent text message: {msg}");
+            return ControlFlow::Continue(Some(Message::Text(t)));
         }
         Message::Binary(d) => {
             info!(">>> {} sent {} bytes: {:?}", who, d.len(), d);

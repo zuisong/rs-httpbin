@@ -13,7 +13,6 @@ use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use pretty_assertions::{assert_eq, assert_ne};
 use serde_json::json;
 use tokio::net::TcpListener;
-use tokio_stream::StreamExt as _;
 use tower::ServiceExt as _;
 
 use super::*;
@@ -779,24 +778,57 @@ async fn relative_redirect() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
-async fn websocket_echo() -> Result<()> {
-    use tokio_tungstenite::tungstenite::protocol::Message;
-    let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::UNSPECIFIED, 0))).await?;
-    let addr = listener.local_addr()?;
-    tokio::spawn(axum::serve(listener, app().into_make_service_with_connect_info::<SocketAddr>()).into_future());
+mod ws {
+    #[allow(unused_imports)]
+    #[cfg(feature = "pretty_assertions")]
+    use pretty_assertions::{assert_eq, assert_ne};
 
-    let url = format!("ws://{addr}/websocket/echo");
-    let (mut socket, _response) = tokio_tungstenite::connect_async(url).await.expect("Failed to connect");
+    use super::*;
 
-    let msg = "Hello, WebSocket!";
-    socket.send(Message::Text(msg.into())).await?;
+    #[tokio::test]
+    async fn test_websocket_echo() {
+        use tokio_stream::StreamExt;
+        use tokio_tungstenite::{connect_async_with_config, tungstenite::Message as WsMessage};
+        // 启动服务
+        let addr = "127.0.0.1:0";
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        let local_addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            start_server(listener).await;
+        });
+        // 等待服务启动
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        let url = format!("ws://{}/websocket/echo?max_fragment_size=2048&max_message_size=10240", local_addr);
 
-    let response = socket.next().await.unwrap()?;
-    assert_eq!(response.into_text()?, format!("echo --> {}", msg));
-    socket.send(Message::Close(None)).await?;
-    tokio::time::sleep(Duration::from_secs_f32(0.01)).await;
-    Ok(())
+        let (mut ws_stream, _) = connect_async_with_config(url, None, false).await.unwrap();
+        ws_stream.send(WsMessage::Text("hello ws".into())).await.unwrap();
+        let msg = ws_stream.next().await.unwrap().unwrap();
+        assert_eq!(msg, WsMessage::Text("hello ws".into()));
+        ws_stream.close(None).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_websocket_echo_max_message_size() {
+        use tokio_stream::StreamExt;
+        use tokio_tungstenite::{connect_async_with_config, tungstenite::Message as WsMessage};
+        // 启动服务
+        let addr = "127.0.0.1:0";
+        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+        let local_addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            start_server(listener).await;
+        });
+        // 等待服务启动
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        let url = format!("ws://{}/websocket/echo?max_fragment_size=2048&max_message_size=10240", local_addr);
+
+        let (mut ws_stream, _) = connect_async_with_config(url, None, false).await.unwrap();
+        ws_stream.send(WsMessage::Text("a".repeat(2049).into())).await.unwrap();
+        let msg = ws_stream.next().await;
+
+        dbg!(&msg);
+        assert!(msg.unwrap().unwrap().is_close());
+    }
 }
 
 #[tokio::test]

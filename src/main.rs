@@ -41,8 +41,8 @@ use uuid::Uuid;
 use crate::data::{Headers, Http, Queries};
 
 mod data;
-mod ws;
 mod ws_chat;
+mod ws_echo;
 
 #[cfg(test)]
 mod tests;
@@ -140,7 +140,7 @@ fn app() -> Router<()> {
                 middleware::from_fn(delay)
             }),
         )
-        .route("/websocket/echo", any(ws::ws_handler))
+        .route("/websocket/echo", any(ws_echo::ws_echo_handler))
         .route("/websocket/chat", any(ws_chat::ws_handler))
         .route(
             "/socket-io/chat",

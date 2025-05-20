@@ -68,7 +68,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/unstable](/unstable?failure_rate=0.6) Fails half the time, accepts optional failure_rate float and seed integer parameters.
 - [x] [/user-agent](/user-agent) Returns user-agent.
 - [x] [/uuid](/uuid) Generates a UUIDv4 value.
-- [ ] /websocket/echo?max_fragment_size=2048&max_message_size=10240 A WebSocket echo service.
+- [x] [/websocket/echo](/websocket/echo?max_fragment_size=2048&max_message_size=10240) A WebSocket echo service.
 - [x] [/websocket/chat](/websocket/chat) A WebSocket chat service.
 - [x] [/xml](/xml) Returns some XML
 - [x] [/zstd](/zstd) Returns zstd-encoded data.
