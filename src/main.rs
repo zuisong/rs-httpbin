@@ -9,7 +9,10 @@ use axum::{
     Json, Router,
     body::{Body, Bytes},
     extract::{DefaultBodyLimit, MatchedPath, Path, Request},
-    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header::*},
+    http::{
+        HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri,
+        header::{self, *},
+    },
     middleware,
     response::{AppendHeaders, Html, IntoResponse, Redirect, Response, Sse, sse::Event},
     routing::*,
@@ -157,7 +160,9 @@ fn app() -> Router<()> {
         // 新增 /status/:code 路由
         .route("/status/{code}", any(status_code_handler))
         .route("/bytes/{n}", get(bytes_n))
-        .route("/dump/request", any(dump_request));
+        .route("/dump/request", any(dump_request))
+        .route("/digest-auth/{qop}/{user}/{passwd}/{algorithm}", any(digest_auth_handler))
+        .route("/digest-auth/{qop}/{user}/{passwd}", any(digest_auth_no_algo_handler));
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
@@ -597,12 +602,12 @@ async fn cache(headers: HeaderMap) -> impl IntoResponse {
 }
 
 async fn cache_n(Path(n): Path<u32>) -> impl IntoResponse {
-    let value = format!("public, max-age={}", n);
+    let value = format!("public, max-age={n}");
     ([(CACHE_CONTROL, value)], StatusCode::OK)
 }
 
 async fn deny() -> impl IntoResponse {
-    return "YOU SHOULDN'T BE HERE";
+    "YOU SHOULDN'T BE HERE"
 }
 
 #[derive(Serialize, Deserialize)]
@@ -809,7 +814,7 @@ struct BytesQuery {
 }
 
 async fn bytes_n(Path(n): Path<u32>, Query(q): Query<BytesQuery>) -> impl IntoResponse {
-    let n = n.max(1).min(1024 * 1024 * 10); // 限制在 1 到 10MB
+    let n = n.min(1024 * 1024 * 10); // 限制在 1 到 10MB
     let mut buf = vec![0u8; n as usize];
     if let Some(seed) = q.seed {
         fastrand::Rng::with_seed(seed).fill(&mut buf);
@@ -819,9 +824,9 @@ async fn bytes_n(Path(n): Path<u32>, Query(q): Query<BytesQuery>) -> impl IntoRe
     ([(CONTENT_TYPE, "application/octet-stream")], buf)
 }
 
-
 async fn dump_request(request: Request) -> impl IntoResponse {
     use std::fmt::Write;
+
     use axum::body::to_bytes;
     let (parts, body) = request.into_parts();
     let method = parts.method;
@@ -836,19 +841,19 @@ async fn dump_request(request: Request) -> impl IntoResponse {
     };
     let mut req = String::new();
     // 请求行
-    writeln!(&mut req, "{} {} {}", method, uri, version).ok();
+    writeln!(&mut req, "{method} {uri} {version}").ok();
     // 请求头
     for (k, v) in &parts.headers {
         if let Ok(val) = v.to_str() {
-            writeln!(&mut req, "{}: {}", k, val).ok();
+            writeln!(&mut req, "{k}: {val}").ok();
         } else {
-            writeln!(&mut req, "{}: <binary>", k).ok();
+            writeln!(&mut req, "{k}: <binary>").ok();
         }
     }
     // 空行
     writeln!(&mut req).ok();
     // body
-    let body_bytes = to_bytes(body,10_000_000).await.unwrap_or_default(); // 限制最大请求体为 10MB
+    let body_bytes = to_bytes(body, 10_000_000).await.unwrap_or_default(); // 限制最大请求体为 10MB
     if !body_bytes.is_empty() {
         if let Ok(body_str) = std::str::from_utf8(&body_bytes) {
             req.push_str(body_str);
@@ -856,8 +861,97 @@ async fn dump_request(request: Request) -> impl IntoResponse {
             req.push_str("<binary body>\n");
         }
     }
+    ([(CONTENT_TYPE, "text/plain; charset=utf-8")], req)
+}
+
+use axum::http::header::WWW_AUTHENTICATE;
+use serde_json::json;
+
+async fn digest_auth_handler(Path((qop, user, passwd, algorithm)): Path<(String, String, String, String)>, headers: HeaderMap) -> Response {
+    // 生成一个固定的 realm 和 nonce
+    let realm = "rs-httpbin";
+    let nonce = "deadbeef";
+    let opaque = "cafebabe";
+    let auth_header = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok());
+    if let Some(auth) = auth_header {
+        if let Some(resp) = parse_and_verify_digest(auth, &user, &passwd, realm, &qop, &algorithm, nonce, opaque) {
+            if resp {
+                return (
+                    StatusCode::OK,
+                    [(header::CONTENT_TYPE, "application/json")],
+                    Json(json!({
+                        "authenticated": true,
+                        "user": user,
+                        "qop": qop,
+                        "algorithm": algorithm
+                    })),
+                )
+                    .into_response();
+            }
+        }
+    }
+    let value = format!(
+        "Digest realm=\"{realm}\",qop=\"{qop}\",nonce=\"{nonce}\",opaque=\"{opaque}\",algorithm=\"{algorithm}\""
+    );
     (
-        [(CONTENT_TYPE, "text/plain; charset=utf-8")],
-        req
+        StatusCode::UNAUTHORIZED,
+        [(WWW_AUTHENTICATE, value)],
+        Json(json!({"authenticated": false, "user": user})),
     )
+        .into_response()
+}
+
+// 简单的 Digest 验证，仅做演示用途
+#[allow(clippy::too_many_arguments)]
+fn parse_and_verify_digest(
+    header: &str,
+    user: &str,
+    passwd: &str,
+    realm: &str,
+    qop: &str,
+    algorithm: &str,
+    nonce: &str,
+    opaque: &str,
+) -> Option<bool> {
+    // 这里只做最简单的 header 检查，实际 Digest Auth 需完整实现 RFC 7616
+    if header.starts_with("Digest ") && header.contains(user) && header.contains(realm) && header.contains(nonce) {
+        // 只要 header 里包含这些字段就算通过
+        Some(true)
+    } else {
+        None
+    }
+}
+
+async fn digest_auth_no_algo_handler(Path((qop, user, passwd)): Path<(String, String, String)>, headers: HeaderMap) -> impl IntoResponse {
+    let realm = "rs-httpbin";
+    let nonce = "deadbeef";
+    let opaque = "cafebabe";
+    let algorithm = "MD5"; // 默认算法
+    let auth_header = headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok());
+    if let Some(auth) = auth_header {
+        if let Some(resp) = parse_and_verify_digest(auth, &user, &passwd, realm, &qop, algorithm, nonce, opaque) {
+            if resp {
+                return (
+                    StatusCode::OK,
+                    [(axum::http::header::CONTENT_TYPE, "application/json")],
+                    Json(serde_json::json!({
+                        "authenticated": true,
+                        "user": user,
+                        "qop": qop,
+                        "algorithm": algorithm
+                    })),
+                )
+                    .into_response();
+            }
+        }
+    }
+    let value = format!(
+        "Digest realm=\"{realm}\",qop=\"{qop}\",nonce=\"{nonce}\",opaque=\"{opaque}\",algorithm=\"{algorithm}\""
+    );
+    (
+        StatusCode::UNAUTHORIZED,
+        [(WWW_AUTHENTICATE, &value)],
+        Json(serde_json::json!({"authenticated": false, "user": user})),
+    )
+        .into_response()
 }

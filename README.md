@@ -32,8 +32,8 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/deflate](/deflate) Returns deflate-encoded data.
 - [x] [/delay/:n](/delay/3) Delays responding for min(n, 10) seconds.
 - [x] [/deny](/deny) Denied by robots.txt file.
-- [ ] /digest-auth/:qop/:user/:passwd/:algorithm Challenges HTTP Digest Auth.
-- [ ] /digest-auth/:qop/:user/:passwd Challenges HTTP Digest Auth.
+- [x] [/digest-auth/:qop/:user/:passwd/:algorithm](/digest-auth/auth/user/password/SHA-256) Challenges HTTP Digest Auth.
+- [x] [/digest-auth/:qop/:user/:passwd](/digest-auth/auth/user/password) Challenges HTTP Digest Auth.
 - [ ] /drip?numbytes=n&duration=s&delay=s&code=code Drips data over a duration after an optional initial delay, then (optionally) returns with the given status code.
 - [x] [/dump/request](/dump/request?a=1) Returns the given request in its HTTP/1.x wire approximate representation.
 - [x] [/encoding/utf8](/encoding/utf8) Returns page containing UTF-8 data.

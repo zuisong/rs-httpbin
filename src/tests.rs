@@ -979,19 +979,19 @@ async fn test_cache_n() {
     let app = app();
     let n = 123;
     let response = app
-        .oneshot(Request::builder().uri(&format!("/cache/{}", n)).body(Body::empty()).unwrap())
+        .oneshot(Request::builder().uri(format!("/cache/{n}")).body(Body::empty()).unwrap())
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let headers = response.headers();
-    assert_eq!(headers.get(CACHE_CONTROL).unwrap(), &format!("public, max-age={}", n));
+    assert_eq!(headers.get(CACHE_CONTROL).unwrap(), &format!("public, max-age={n}"));
 }
 
 #[tokio::test]
 async fn test_deny() {
     let app = app();
     let response = app
-        .oneshot(Request::builder().uri(&format!("/deny")).body(Body::empty()).unwrap())
+        .oneshot(Request::builder().uri("/deny".to_string()).body(Body::empty()).unwrap())
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -1015,7 +1015,7 @@ mod bytes {
         let app = app();
         let n = 16;
         let response = app
-            .oneshot(Request::builder().uri(&format!("/bytes/{}", n)).body(Body::empty()).unwrap())
+            .oneshot(Request::builder().uri(format!("/bytes/{n}")).body(Body::empty()).unwrap())
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
@@ -1034,7 +1034,7 @@ mod bytes {
             .clone()
             .oneshot(
                 Request::builder()
-                    .uri(&format!("/bytes/{}?seed={}", n, seed))
+                    .uri(format!("/bytes/{n}?seed={seed}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1043,7 +1043,7 @@ mod bytes {
         let response2 = app
             .oneshot(
                 Request::builder()
-                    .uri(&format!("/bytes/{}?seed={}", n, seed))
+                    .uri(format!("/bytes/{n}?seed={seed}"))
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -1073,4 +1073,73 @@ async fn test_dump_request_basic() {
     assert!(text.contains("POST /dump/request?foo=bar HTTP/1.1"));
     assert!(text.contains("x-test: abc"));
     assert!(text.contains("hello world"));
+}
+
+mod test_digest_auth {
+    use axum::{
+        body::Body,
+        http::{
+            Request, StatusCode,
+            header::{AUTHORIZATION, CONTENT_TYPE, WWW_AUTHENTICATE},
+        },
+    };
+    use tower::ServiceExt;
+
+    use super::*;
+    use crate::tests::ext::BodyExt; // for `oneshot`
+
+    #[tokio::test]
+    async fn test_digest_auth_unauthorized() {
+        let app = app();
+        let uri = "/digest-auth/auth/testuser/testpass/MD5";
+        let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        let www = resp.headers().get(WWW_AUTHENTICATE).unwrap().to_str().unwrap();
+        assert!(www.contains("Digest realm=\"rs-httpbin\""));
+    }
+
+    #[tokio::test]
+    async fn test_digest_auth_success() {
+        let app = app();
+        let uri = "/digest-auth/auth/testuser/testpass/MD5";
+        // 构造一个简单的 Authorization 头
+        let auth = "Digest username=\"testuser\", realm=\"rs-httpbin\", nonce=\"deadbeef\", uri=\"/digest-auth/auth/testuser/testpass/MD5\", response=\"dummy\"";
+        let req = Request::builder().uri(uri).header(AUTHORIZATION, auth).body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get(CONTENT_TYPE).unwrap().to_str().unwrap();
+        assert!(ct.contains("application/json"));
+        let body = (resp.body()).await;
+        let text = String::from_utf8_lossy(&body);
+        assert!(text.contains("\"authenticated\":true"));
+        assert!(text.contains("testuser"));
+    }
+
+    #[tokio::test]
+    async fn test_digest_auth_no_algo_unauthorized() {
+        let app = app();
+        let uri = "/digest-auth/auth/testuser/testpass";
+        let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+        let www = resp.headers().get(WWW_AUTHENTICATE).unwrap().to_str().unwrap();
+        assert!(www.contains("Digest realm=\"rs-httpbin\""));
+    }
+
+    #[tokio::test]
+    async fn test_digest_auth_no_algo_success() {
+        let app = app();
+        let uri = "/digest-auth/auth/testuser/testpass";
+        let auth = "Digest username=\"testuser\", realm=\"rs-httpbin\", nonce=\"deadbeef\", uri=\"/digest-auth/auth/testuser/testpass\", response=\"dummy\"";
+        let req = Request::builder().uri(uri).header(AUTHORIZATION, auth).body(Body::empty()).unwrap();
+        let resp = app.oneshot(req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp.headers().get(CONTENT_TYPE).unwrap().to_str().unwrap();
+        assert!(ct.contains("application/json"));
+        let body = (resp.body()).await;
+        let text = String::from_utf8_lossy(&body);
+        assert!(text.contains("\"authenticated\":true"));
+        assert!(text.contains("testuser"));
+    }
 }
