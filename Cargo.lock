@@ -285,9 +285,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.23"
+version = "1.2.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f4ac86a9e5bc1e2b3449ab9d7d3a6a405e3d1bb28d7b9be8614f55846ae3766"
+checksum = "16595d3be041c03b09d08d0858631facccee9221e579704070e6e9e4915d3bc7"
 dependencies = [
  "jobserver",
  "libc",
@@ -414,6 +414,12 @@ dependencies = [
  "block-buffer",
  "crypto-common",
 ]
+
+[[package]]
+name = "either"
+version = "1.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "encoding_rs"
@@ -773,9 +779,9 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 
 [[package]]
 name = "jiff"
-version = "0.2.13"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f02000660d30638906021176af16b17498bd0d12813dbfe7b276d8bc7f3c0806"
+checksum = "a194df1107f33c79f4f93d02c80798520551949d59dfad22b6157048a88cca93"
 dependencies = [
  "jiff-static",
  "log",
@@ -786,9 +792,9 @@ dependencies = [
 
 [[package]]
 name = "jiff-static"
-version = "0.2.13"
+version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3c30758ddd7188629c6713fc45d1188af4f44c90582311d0c8d8c9907f60c48"
+checksum = "6c6e1db7ed32c6c71b759497fae34bf7933636f75a251b9e736555da426f6442"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -879,13 +885,13 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "1.0.3"
+version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2886843bf800fba2e3377cff24abf6379b4c4d5c6681eaf9ea5b0d15090450bd"
+checksum = "78bed444cc8a2160f01cbcf811ef18cac863ad68ae8ca62092e8db51d51c761c"
 dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
- "windows-sys",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1113,6 +1119,7 @@ dependencies = [
  "axum-valid",
  "base64 0.22.1",
  "derive_more",
+ "either",
  "fastrand",
  "form_urlencoded",
  "futures-util",
@@ -1149,9 +1156,9 @@ checksum = "719b953e2095829ee67db738b3bfa9fa368c94900df327b3f07fe6e794d2fe1f"
 
 [[package]]
 name = "rustversion"
-version = "1.0.20"
+version = "1.0.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eded382c5f5f786b989652c49544c4877d9f015cc22e145a5ea8ea66c2921cd2"
+checksum = "8a0d197bd2c9dc6e53b84da9556a69ba4cdfab8619eb41a8bd1cc2027a0f6b1d"
 
 [[package]]
 name = "ryu"
@@ -1260,12 +1267,12 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.5.9"
+version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f5fd57c80058a56cf5c777ab8a126398ece8e442983605d280a44ce79d0edef"
+checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
 dependencies = [
  "libc",
- "windows-sys",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1471,9 +1478,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.45.0"
+version = "1.45.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2513ca694ef9ede0fb23fe71a4ee4107cb102b9dc1930f6d0fd77aae068ae165"
+checksum = "75ef51a33ef1da925cea3e4eb122833cb377c61439ca401b770f54902b806779"
 dependencies = [
  "backtrace",
  "bytes",
@@ -1482,7 +1489,7 @@ dependencies = [
  "pin-project-lite",
  "socket2",
  "tokio-macros",
- "windows-sys",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1708,7 +1715,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "458f7a779bf54acc9f347480ac654f68407d3aab21269a6e3c9f922acd9e2da9"
 dependencies = [
  "getrandom",
- "serde",
 ]
 
 [[package]]
@@ -1768,6 +1774,15 @@ name = "windows-sys"
 version = "0.52.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "282be5f36a8ce781fad8c8ae18fa3f9beff57ec1b52cb3de0789201425d9a33d"
+dependencies = [
+ "windows-targets",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.59.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets",
 ]

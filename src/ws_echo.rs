@@ -9,6 +9,7 @@ use axum::{
     response::IntoResponse,
 };
 use axum_extra::{extract::Query, response::ErasedJson};
+use either::Either;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -49,11 +50,6 @@ pub async fn ws_echo_handler(
             .into_response(),
         Err(e) => e.into_response(),
     }
-}
-
-enum Either<L, R> {
-    Left(L),
-    Right(R),
 }
 
 async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
