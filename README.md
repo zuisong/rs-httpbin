@@ -23,15 +23,15 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [x] [/basic-auth/:user/:passwd](/basic-auth/user/passwd) Challenges HTTPBasic Auth.
 - [x] [/bearer](/bearer) Checks Bearer token header - returns 401 if not set.
 - [x] [/br](/br) Returns brotli-encoded data.
-- [ ] /bytes/:n Generates n random bytes of binary data, accepts optional seed integer parameter.
-- [x] /cache Returns 200 unless an If-Modified-Since or If-None-Match header is provided, when it returns a 304.
-- [ ] /cache/:n Sets a Cache-Control header for n seconds.
+- [x] [/bytes/:n](/bytes/1024?seed=) Generates min(n, 10_000_000) random bytes of binary data, accepts optional seed integer parameter.
+- [x] [/cache](/cache) Returns 200 unless an If-Modified-Since or If-None-Match header is provided, when it returns a 304.
+- [x] [/cache/:n](/cache/3) Sets a Cache-Control header for n seconds.
 - [x] [/cookies](/cookies) Returns cookie data.
 - [x] [/cookies/delete?name](/cookies/delete?k1=&k2=) Deletes one or more simple cookies.
 - [x] [/cookies/set?name=value](/cookies/set?k1=v1&k2=v2) Sets one or more simple cookies.
 - [x] [/deflate](/deflate) Returns deflate-encoded data.
 - [x] [/delay/:n](/delay/3) Delays responding for min(n, 10) seconds.
-- [ ] /deny Denied by robots.txt file.
+- [x] [/deny](/deny) Denied by robots.txt file.
 - [ ] /digest-auth/:qop/:user/:passwd/:algorithm Challenges HTTP Digest Auth.
 - [ ] /digest-auth/:qop/:user/:passwd Challenges HTTP Digest Auth.
 - [ ] /drip?numbytes=n&duration=s&delay=s&code=code Drips data over a duration after an optional initial delay, then (optionally) returns with the given status code.

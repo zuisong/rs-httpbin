@@ -147,13 +147,16 @@ fn app() -> Router<()> {
             any(|| async { Html(include_str!("../assets/socketio-chat.html")) }),
         )
         .route("/cache", any(cache))
+        .route("/cache/{n}", any(cache_n))
+        .route("/deny", any(deny))
         .merge(
             Router::new()
                 .route("/openapi.json", get(|| async { include_str!("../openapi.json") }))
                 .route("/swagger-ui", get(|| async { Html(swagger_ui::swagger_ui_html("/openapi.json")) })),
         )
         // 新增 /status/:code 路由
-        .route("/status/{code}", any(status_code_handler));
+        .route("/status/{code}", any(status_code_handler))
+        .route("/bytes/{n}", get(bytes_n));
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
@@ -592,6 +595,15 @@ async fn cache(headers: HeaderMap) -> impl IntoResponse {
     }
 }
 
+async fn cache_n(Path(n): Path<u32>) -> impl IntoResponse {
+    let value = format!("public, max-age={}", n);
+    ([(CACHE_CONTROL, value)], StatusCode::OK)
+}
+
+async fn deny() -> impl IntoResponse {
+    return "YOU SHOULDN'T BE HERE";
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct BearerAuth {
     pub authorized: bool,
@@ -788,4 +800,20 @@ async fn status_code_handler(Path(code): Path<u16>) -> Response {
         )),
     )
         .into_response()
+}
+
+#[derive(Debug, Deserialize)]
+struct BytesQuery {
+    seed: Option<u64>,
+}
+
+async fn bytes_n(Path(n): Path<u32>, Query(q): Query<BytesQuery>) -> impl IntoResponse {
+    let n = n.max(1).min(1024 * 1024 * 10); // 限制在 1 到 10MB
+    let mut buf = vec![0u8; n as usize];
+    if let Some(seed) = q.seed {
+        fastrand::Rng::with_seed(seed).fill(&mut buf);
+    } else {
+        fastrand::fill(&mut buf);
+    }
+    ([(CONTENT_TYPE, "application/octet-stream")], buf)
 }
