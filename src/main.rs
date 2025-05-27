@@ -156,7 +156,8 @@ fn app() -> Router<()> {
         )
         // 新增 /status/:code 路由
         .route("/status/{code}", any(status_code_handler))
-        .route("/bytes/{n}", get(bytes_n));
+        .route("/bytes/{n}", get(bytes_n))
+        .route("/dump/request", any(dump_request));
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
@@ -816,4 +817,47 @@ async fn bytes_n(Path(n): Path<u32>, Query(q): Query<BytesQuery>) -> impl IntoRe
         fastrand::fill(&mut buf);
     }
     ([(CONTENT_TYPE, "application/octet-stream")], buf)
+}
+
+
+async fn dump_request(request: Request) -> impl IntoResponse {
+    use std::fmt::Write;
+    use axum::body::to_bytes;
+    let (parts, body) = request.into_parts();
+    let method = parts.method;
+    let uri = parts.uri;
+    let version = match parts.version {
+        axum::http::Version::HTTP_09 => "HTTP/0.9",
+        axum::http::Version::HTTP_10 => "HTTP/1.0",
+        axum::http::Version::HTTP_11 => "HTTP/1.1",
+        axum::http::Version::HTTP_2 => "HTTP/2.0",
+        axum::http::Version::HTTP_3 => "HTTP/3.0",
+        _ => "HTTP/1.1",
+    };
+    let mut req = String::new();
+    // 请求行
+    writeln!(&mut req, "{} {} {}", method, uri, version).ok();
+    // 请求头
+    for (k, v) in &parts.headers {
+        if let Ok(val) = v.to_str() {
+            writeln!(&mut req, "{}: {}", k, val).ok();
+        } else {
+            writeln!(&mut req, "{}: <binary>", k).ok();
+        }
+    }
+    // 空行
+    writeln!(&mut req).ok();
+    // body
+    let body_bytes = to_bytes(body,10_000_000).await.unwrap_or_default(); // 限制最大请求体为 10MB
+    if !body_bytes.is_empty() {
+        if let Ok(body_str) = std::str::from_utf8(&body_bytes) {
+            req.push_str(body_str);
+        } else {
+            req.push_str("<binary body>\n");
+        }
+    }
+    (
+        [(CONTENT_TYPE, "text/plain; charset=utf-8")],
+        req
+    )
 }

@@ -987,7 +987,6 @@ async fn test_cache_n() {
     assert_eq!(headers.get(CACHE_CONTROL).unwrap(), &format!("public, max-age={}", n));
 }
 
-
 #[tokio::test]
 async fn test_deny() {
     let app = app();
@@ -999,7 +998,6 @@ async fn test_deny() {
     let body = response.into_body();
     assert_eq!(body.body_as_string().await, "YOU SHOULDN'T BE HERE");
 }
-
 
 #[cfg(test)]
 mod bytes {
@@ -1055,4 +1053,24 @@ mod bytes {
         let body2 = (response2.body()).await;
         assert_eq!(body1, body2, "Same seed should produce same bytes");
     }
+}
+
+#[tokio::test]
+async fn test_dump_request_basic() {
+    let app = app();
+    let req = Request::builder()
+        .method("POST")
+        .uri("/dump/request?foo=bar")
+        .header("X-Test", "abc")
+        .body(Body::from("hello world"))
+        .unwrap();
+    let response = app.oneshot(req).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let headers = response.headers();
+    assert_eq!(headers.get(CONTENT_TYPE).unwrap(), "text/plain; charset=utf-8");
+    let text = (response.body_as_string()).await;
+    dbg!(&text);
+    assert!(text.contains("POST /dump/request?foo=bar HTTP/1.1"));
+    assert!(text.contains("x-test: abc"));
+    assert!(text.contains("hello world"));
 }

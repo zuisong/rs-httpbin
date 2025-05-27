@@ -35,7 +35,7 @@ A rust port of the venerable httpbin.org HTTP request & response testing service
 - [ ] /digest-auth/:qop/:user/:passwd/:algorithm Challenges HTTP Digest Auth.
 - [ ] /digest-auth/:qop/:user/:passwd Challenges HTTP Digest Auth.
 - [ ] /drip?numbytes=n&duration=s&delay=s&code=code Drips data over a duration after an optional initial delay, then (optionally) returns with the given status code.
-- [ ] /dump/request Returns the given request in its HTTP/1.x wire approximate representation.
+- [x] [/dump/request](/dump/request?a=1) Returns the given request in its HTTP/1.x wire approximate representation.
 - [x] [/encoding/utf8](/encoding/utf8) Returns page containing UTF-8 data.
 - [ ] /etag/:etag Assumes the resource has the given etag and responds to If-None-Match header with a 200 or 304 and If-Match with a 200 or 412 as appropriate.
 - [x] [/forms/post](/forms/post) HTML form that submits to /post
