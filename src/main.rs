@@ -11,7 +11,7 @@ use axum::{
     extract::{DefaultBodyLimit, MatchedPath, Path, Request},
     http::{
         HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri,
-        header::{self, *},
+        header::*,
     },
     middleware,
     response::{AppendHeaders, Html, IntoResponse, Redirect, Response, Sse, sse::Event},
@@ -208,6 +208,7 @@ fn app() -> Router<()> {
 
 mod socket_io_chat;
 mod swagger_ui;
+mod axum_client_ip;
 
 #[tokio::main]
 async fn main() {
@@ -872,13 +873,13 @@ async fn digest_auth_handler(Path((qop, user, passwd, algorithm)): Path<(String,
     let realm = "rs-httpbin";
     let nonce = "deadbeef";
     let opaque = "cafebabe";
-    let auth_header = headers.get(header::AUTHORIZATION).and_then(|v| v.to_str().ok());
+    let auth_header = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok());
     if let Some(auth) = auth_header {
         if let Some(resp) = parse_and_verify_digest(auth, &user, &passwd, realm, &qop, &algorithm, nonce, opaque) {
             if resp {
                 return (
                     StatusCode::OK,
-                    [(header::CONTENT_TYPE, "application/json")],
+                    [(CONTENT_TYPE, "application/json")],
                     Json(json!({
                         "authenticated": true,
                         "user": user,
@@ -906,12 +907,12 @@ async fn digest_auth_handler(Path((qop, user, passwd, algorithm)): Path<(String,
 fn parse_and_verify_digest(
     header: &str,
     user: &str,
-    passwd: &str,
+    _passwd: &str,
     realm: &str,
-    qop: &str,
-    algorithm: &str,
+    _qop: &str,
+    _algorithm: &str,
     nonce: &str,
-    opaque: &str,
+    _opaque: &str,
 ) -> Option<bool> {
     // 这里只做最简单的 header 检查，实际 Digest Auth 需完整实现 RFC 7616
     if header.starts_with("Digest ") && header.contains(user) && header.contains(realm) && header.contains(nonce) {
@@ -927,14 +928,14 @@ async fn digest_auth_no_algo_handler(Path((qop, user, passwd)): Path<(String, St
     let nonce = "deadbeef";
     let opaque = "cafebabe";
     let algorithm = "MD5"; // 默认算法
-    let auth_header = headers.get(axum::http::header::AUTHORIZATION).and_then(|v| v.to_str().ok());
+    let auth_header = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok());
     if let Some(auth) = auth_header {
         if let Some(resp) = parse_and_verify_digest(auth, &user, &passwd, realm, &qop, algorithm, nonce, opaque) {
             if resp {
                 return (
                     StatusCode::OK,
-                    [(axum::http::header::CONTENT_TYPE, "application/json")],
-                    Json(serde_json::json!({
+                    [(CONTENT_TYPE, "application/json")],
+                    Json(json!({
                         "authenticated": true,
                         "user": user,
                         "qop": qop,
@@ -951,7 +952,7 @@ async fn digest_auth_no_algo_handler(Path((qop, user, passwd)): Path<(String, St
     (
         StatusCode::UNAUTHORIZED,
         [(WWW_AUTHENTICATE, &value)],
-        Json(serde_json::json!({"authenticated": false, "user": user})),
+        Json(json!({"authenticated": false, "user": user})),
     )
         .into_response()
 }

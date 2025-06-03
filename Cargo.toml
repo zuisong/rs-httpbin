@@ -14,7 +14,6 @@ axum = { version = "0.8.4", default-features = false, features = [
   "tower-log",
   "ws",
 ] }
-axum-client-ip = "=0.7.0"
 axum-extra = { version = "0.10.1", features = [
   "cookie",
   "erased-json",
@@ -26,6 +25,7 @@ axum-valid = { version = "0.23.0", default-features = false, features = [
   "garde",
 ] }
 base64 = "0.22.1"
+client-ip = "0.1.1"
 derive_more = { version = "2.0.1", features = ["deref", "deref_mut"] }
 either = "1.15.0"
 fastrand = "2.3.0"
