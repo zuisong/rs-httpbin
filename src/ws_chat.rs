@@ -16,7 +16,7 @@ use axum::{
 };
 use futures_util::{FutureExt as _, StreamExt};
 use tokio::sync::{Mutex, mpsc};
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 
 static STATE: LazyLock<Arc<Mutex<Shared>>> = LazyLock::new(|| Arc::new(Mutex::new(Shared::new())));
 
@@ -72,7 +72,7 @@ async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> 
     let username = match lines.next().await {
         Some(Ok(Message::Text(line))) => line,
         _ => {
-            tracing::error!("Failed to get username from {}. Client disconnected.", addr);
+            error!("Failed to get username from {addr}. Client disconnected.");
             return Ok(());
         }
     };
@@ -110,7 +110,7 @@ async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> 
                     }
                 }
                 Some(Err(e)) => {
-                    tracing::error!("an error occurred while processing messages for {}; error = {:?}", username, e);
+                    error!("an error occurred while processing messages for {}; error = {:?}", username, e);
                 }
                 None => break,
             },
@@ -121,7 +121,7 @@ async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> 
         state.peers.remove(&addr);
 
         let msg = format!("{username} has left the chat");
-        tracing::info!("{}", msg);
+        info!("{}", msg);
         state.broadcast(addr, &msg.into()).await;
     }
 

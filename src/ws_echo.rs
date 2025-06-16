@@ -11,7 +11,7 @@ use axum::{
 use axum_extra::{extract::Query, response::ErasedJson};
 use either::Either;
 use serde::{Deserialize, Serialize};
-use tracing::info;
+use tracing::{debug, info};
 
 #[derive(Deserialize, Serialize)]
 pub struct EchoConfig {
@@ -27,7 +27,7 @@ pub async fn ws_echo_handler(
 ) -> impl IntoResponse {
     match ws {
         Ok(ws) => {
-            tracing::debug!("accepted a WebSocket using {version:?}");
+            debug!("accepted a WebSocket using {version:?}");
 
             let mut ws = ws;
             if let Some(size) = params.max_fragment_size {

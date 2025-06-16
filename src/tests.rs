@@ -8,9 +8,6 @@ use axum::{
 use base64::prelude::BASE64_STANDARD;
 use futures_util::SinkExt as _;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
-#[allow(unused_imports)]
-#[cfg(feature = "pretty_assertions")]
-use pretty_assertions::{assert_eq, assert_ne};
 use serde_json::json;
 use tokio::net::TcpListener;
 use tower::ServiceExt as _;
@@ -779,9 +776,6 @@ async fn relative_redirect() -> Result<()> {
 }
 
 mod ws {
-    #[allow(unused_imports)]
-    #[cfg(feature = "pretty_assertions")]
-    use pretty_assertions::{assert_eq, assert_ne};
 
     use super::*;
 

@@ -9,10 +9,7 @@ use axum::{
     Json, Router,
     body::{Body, Bytes},
     extract::{DefaultBodyLimit, MatchedPath, Path, Request},
-    http::{
-        HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri,
-        header::*,
-    },
+    http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, header::*},
     middleware,
     response::{AppendHeaders, Html, IntoResponse, Redirect, Response, Sse, sse::Event},
     routing::*,
@@ -37,7 +34,7 @@ use tower_http::{
     ServiceBuilderExt, compression::CompressionLayer, cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer,
     trace::TraceLayer,
 };
-use tracing::debug_span;
+use tracing::{debug_span, info};
 use tracing_subscriber::{EnvFilter, fmt::layer, layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 
@@ -206,9 +203,9 @@ fn app() -> Router<()> {
     router.layer(service)
 }
 
+mod axum_client_ip;
 mod socket_io_chat;
 mod swagger_ui;
-mod axum_client_ip;
 
 #[tokio::main]
 async fn main() {
@@ -487,7 +484,7 @@ struct HostName {
 }
 
 async fn hostname() -> impl IntoResponse {
-    let hostname = whoami::hostname().unwrap_or("<< unknown hostname >>".to_string());
+    let hostname = whoami::fallible::hostname().unwrap_or("<< unknown hostname >>".to_string());
 
     ErasedJson::pretty(HostName { hostname })
 }
@@ -741,6 +738,7 @@ mod sse {
 }
 
 mod links {
+
     use super::*;
 
     #[derive(Debug, Deserialize, Validate)]
@@ -758,7 +756,7 @@ mod links {
             return Redirect::to(format!("/links/{total}/0").as_str()).into_response();
         };
 
-        tracing::info!(cur, total);
+        info!(cur, total);
 
         let mut env = minijinja::Environment::new();
         env.set_trim_blocks(true);
@@ -891,9 +889,7 @@ async fn digest_auth_handler(Path((qop, user, passwd, algorithm)): Path<(String,
             }
         }
     }
-    let value = format!(
-        "Digest realm=\"{realm}\",qop=\"{qop}\",nonce=\"{nonce}\",opaque=\"{opaque}\",algorithm=\"{algorithm}\""
-    );
+    let value = format!(r#"Digest realm="{realm}",qop="{qop}",nonce="{nonce}",opaque="{opaque}",algorithm="{algorithm}""#);
     (
         StatusCode::UNAUTHORIZED,
         [(WWW_AUTHENTICATE, value)],
@@ -946,9 +942,7 @@ async fn digest_auth_no_algo_handler(Path((qop, user, passwd)): Path<(String, St
             }
         }
     }
-    let value = format!(
-        "Digest realm=\"{realm}\",qop=\"{qop}\",nonce=\"{nonce}\",opaque=\"{opaque}\",algorithm=\"{algorithm}\""
-    );
+    let value = format!("Digest realm=\"{realm}\",qop=\"{qop}\",nonce=\"{nonce}\",opaque=\"{opaque}\",algorithm=\"{algorithm}\"");
     (
         StatusCode::UNAUTHORIZED,
         [(WWW_AUTHENTICATE, &value)],
