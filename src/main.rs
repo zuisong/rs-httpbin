@@ -26,9 +26,11 @@ use axum_extra::{
 };
 use axum_valid::Garde;
 use base64::{Engine, prelude::BASE64_STANDARD};
+use futures_util::stream;
 use garde::Validate;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_PLAIN_UTF_8, TEXT_XML};
 use serde::{Deserialize, Serialize};
+use tokio::time::sleep;
 use tower::ServiceBuilder;
 use tower_http::{
     ServiceBuilderExt, compression::CompressionLayer, cors::CorsLayer, request_id::MakeRequestUuid, set_header::SetRequestHeaderLayer,
@@ -159,7 +161,11 @@ fn app() -> Router<()> {
         .route("/bytes/{n}", get(bytes_n))
         .route("/dump/request", any(dump_request))
         .route("/digest-auth/{qop}/{user}/{passwd}/{algorithm}", any(digest_auth_handler))
-        .route("/digest-auth/{qop}/{user}/{passwd}", any(digest_auth_no_algo_handler));
+        .route("/digest-auth/{qop}/{user}/{passwd}", any(digest_auth_no_algo_handler))
+        .route("/drip", get(drip_handler))
+        .route("/etag/{etag}", any(etag_handler))
+        .route("/range/{n}", get(range_handler))
+        .route("/stream/{n}", get(stream_handler));
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
@@ -949,4 +955,85 @@ async fn digest_auth_no_algo_handler(Path((qop, user, passwd)): Path<(String, St
         Json(json!({"authenticated": false, "user": user})),
     )
         .into_response()
+}
+
+#[derive(Debug, Deserialize)]
+struct DripQuery {
+    numbytes: Option<usize>,
+    duration: Option<u64>,
+    delay: Option<u64>,
+    code: Option<u16>,
+}
+
+async fn drip_handler(Query(q): Query<DripQuery>) -> impl IntoResponse {
+    let numbytes = q.numbytes.unwrap_or(10);
+    let duration = q.duration.unwrap_or(1);
+    let delay = q.delay.unwrap_or(0);
+    let code = q.code.unwrap_or(200);
+
+    sleep(Duration::from_secs(delay)).await;
+
+    let chunk_size = (numbytes as u64 / duration).max(1) as usize;
+    let stream = stream::iter(
+        (0..numbytes)
+            .step_by(chunk_size)
+            .map(move |_| Ok::<_, std::io::Error>(Bytes::from_iter(vec![b'*'; chunk_size]))),
+    );
+
+    (
+        StatusCode::from_u16(code).unwrap_or(StatusCode::OK),
+        [(CONTENT_TYPE, "application/octet-stream")],
+        axum::body::Body::from_stream(stream),
+    )
+}
+
+async fn etag_handler(Path(etag): Path<String>, headers: HeaderMap) -> impl IntoResponse {
+    let if_none_match = headers.get(IF_NONE_MATCH).and_then(|v| v.to_str().ok());
+    let if_match = headers.get(IF_MATCH).and_then(|v| v.to_str().ok());
+
+    if let Some(tag) = if_none_match {
+        if tag == etag {
+            return StatusCode::NOT_MODIFIED.into_response();
+        }
+    }
+
+    if let Some(tag) = if_match {
+        if tag != etag {
+            return StatusCode::PRECONDITION_FAILED.into_response();
+        }
+    }
+
+    ([(ETAG, etag.as_bytes())], Json(json!({ "etag": etag }))).into_response()
+}
+
+#[derive(Debug, Deserialize)]
+struct RangeQuery {
+    duration: Option<u64>,
+    chunk_size: Option<usize>,
+}
+
+async fn range_handler(Path(n): Path<u32>, Query(q): Query<RangeQuery>) -> impl IntoResponse {
+    let total = n as usize;
+    let chunk_size = q.chunk_size.unwrap_or(4096).max(1);
+    let _duration = q.duration.unwrap_or(1);
+
+    let stream = stream::iter(
+        (0..total)
+            .step_by(chunk_size)
+            .map(move |_| Ok::<_, std::io::Error>(Bytes::from_iter(vec![b'*'; chunk_size]))),
+    );
+
+    ([(CONTENT_TYPE, "application/octet-stream")], axum::body::Body::from_stream(stream))
+}
+
+async fn stream_handler(Path(n): Path<u32>) -> impl IntoResponse {
+    let stream = stream::iter((0..n).map(|i| {
+        Ok::<_, std::io::Error>(Bytes::from(format!(
+            "line {}
+",
+            i
+        )))
+    }));
+
+    ([(CONTENT_TYPE, "text/plain; charset=utf-8")], axum::body::Body::from_stream(stream))
 }

@@ -10,45 +10,11 @@ use futures_util::SinkExt as _;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use serde_json::json;
 use tokio::net::TcpListener;
-use tower::ServiceExt as _;
 
 use super::*;
-use crate::tests::ext::BodyExt as _;
 
-pub mod ext {
-    use std::{future::Future, pin::Pin};
+pub mod ext;
 
-    use http_body_util::BodyExt as _;
-    use serde_json::Value;
-
-    pub trait BodyExt {
-        fn body(self) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>>;
-        fn body_as_string(self) -> Pin<Box<dyn Future<Output = String> + Send>>;
-        fn body_as_json(self) -> Pin<Box<dyn Future<Output = Value> + Send>>;
-    }
-
-    impl<T> BodyExt for T
-    where
-        T: axum::body::HttpBody + Send + 'static,
-        T::Data: Send,
-        T::Error: std::fmt::Debug,
-    {
-        fn body(self) -> Pin<Box<dyn Future<Output = Vec<u8>> + Send>> {
-            let fut = async { self.collect().await.unwrap().to_bytes().to_vec() };
-            Box::pin(fut)
-        }
-
-        fn body_as_string(self) -> Pin<Box<dyn Future<Output = String> + Send>> {
-            let fut = async { String::from_utf8(self.body().await).unwrap() };
-            Box::pin(fut)
-        }
-
-        fn body_as_json(self) -> Pin<Box<dyn Future<Output = Value> + Send>> {
-            let fut = async { serde_json::from_slice(&self.body().await).unwrap() };
-            Box::pin(fut)
-        }
-    }
-}
 #[tokio::test]
 async fn index() -> Result<()> {
     let response = app().oneshot(Request::builder().uri("/").body(Body::empty())?).await?;
@@ -775,55 +741,7 @@ async fn relative_redirect() -> Result<()> {
     Ok(())
 }
 
-mod ws {
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_websocket_echo() {
-        use tokio_stream::StreamExt;
-        use tokio_tungstenite::{connect_async_with_config, tungstenite::Message as WsMessage};
-        // 启动服务
-        let addr = "127.0.0.1:0";
-        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-        let local_addr = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            start_server(listener).await;
-        });
-        // 等待服务启动
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        let url = format!("ws://{local_addr}/websocket/echo?max_fragment_size=2048&max_message_size=10240");
-
-        let (mut ws_stream, _) = connect_async_with_config(url, None, false).await.unwrap();
-        ws_stream.send(WsMessage::Text("hello ws".into())).await.unwrap();
-        let msg = ws_stream.next().await.unwrap().unwrap();
-        assert_eq!(msg, WsMessage::Text("hello ws".into()));
-        ws_stream.close(None).await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_websocket_echo_max_message_size() {
-        use tokio_stream::StreamExt;
-        use tokio_tungstenite::{connect_async_with_config, tungstenite::Message as WsMessage};
-        // 启动服务
-        let addr = "127.0.0.1:0";
-        let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-        let local_addr = listener.local_addr().unwrap();
-        tokio::spawn(async move {
-            start_server(listener).await;
-        });
-        // 等待服务启动
-        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
-        let url = format!("ws://{local_addr}/websocket/echo?max_fragment_size=2048&max_message_size=10240");
-
-        let (mut ws_stream, _) = connect_async_with_config(url, None, false).await.unwrap();
-        ws_stream.send(WsMessage::Text("a".repeat(2049).into())).await.unwrap();
-        let msg = ws_stream.next().await;
-
-        dbg!(&msg);
-        assert!(msg.unwrap().unwrap().is_close());
-    }
-}
+mod test_ws;
 
 #[tokio::test]
 async fn swagger_ui() -> Result<()> {
@@ -994,60 +912,7 @@ async fn test_deny() {
 }
 
 #[cfg(test)]
-mod bytes {
-    use axum::{
-        body::Body,
-        http::{Request, StatusCode, header::CONTENT_TYPE},
-    };
-    use tower::ServiceExt;
-
-    use super::*;
-    use crate::tests::ext::BodyExt; // for `oneshot`
-
-    #[tokio::test]
-    async fn test_bytes_n_basic() {
-        let app = app();
-        let n = 16;
-        let response = app
-            .oneshot(Request::builder().uri(format!("/bytes/{n}")).body(Body::empty()).unwrap())
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        let headers = response.headers();
-        assert_eq!(headers.get(CONTENT_TYPE).unwrap(), "application/octet-stream");
-        let body = response.body().await;
-        assert_eq!(body.len(), n as usize);
-    }
-
-    #[tokio::test]
-    async fn test_bytes_n_with_seed() {
-        let app = app();
-        let n = 8;
-        let seed = 42;
-        let response1 = app
-            .clone()
-            .oneshot(
-                Request::builder()
-                    .uri(format!("/bytes/{n}?seed={seed}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        let response2 = app
-            .oneshot(
-                Request::builder()
-                    .uri(format!("/bytes/{n}?seed={seed}"))
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        let body1 = (response1.body()).await;
-        let body2 = (response2.body()).await;
-        assert_eq!(body1, body2, "Same seed should produce same bytes");
-    }
-}
+mod test_bytes;
 
 #[tokio::test]
 async fn test_dump_request_basic() {
@@ -1069,71 +934,85 @@ async fn test_dump_request_basic() {
     assert!(text.contains("hello world"));
 }
 
-mod test_digest_auth {
-    use axum::{
-        body::Body,
-        http::{
-            Request, StatusCode,
-            header::{AUTHORIZATION, CONTENT_TYPE, WWW_AUTHENTICATE},
-        },
-    };
-    use tower::ServiceExt;
+mod test_digest_auth;
 
-    use super::*;
-    use crate::tests::ext::BodyExt; // for `oneshot`
+use axum::http::header::{CONTENT_TYPE, ETAG, IF_MATCH, IF_NONE_MATCH};
+use tower::ServiceExt;
 
-    #[tokio::test]
-    async fn test_digest_auth_unauthorized() {
-        let app = app();
-        let uri = "/digest-auth/auth/testuser/testpass/MD5";
-        let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
-        let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-        let www = resp.headers().get(WWW_AUTHENTICATE).unwrap().to_str().unwrap();
-        assert!(www.contains("Digest realm=\"rs-httpbin\""));
-    }
+use crate::{app, tests::ext::BodyExt};
+// for `oneshot`
 
-    #[tokio::test]
-    async fn test_digest_auth_success() {
-        let app = app();
-        let uri = "/digest-auth/auth/testuser/testpass/MD5";
-        // 构造一个简单的 Authorization 头
-        let auth = "Digest username=\"testuser\", realm=\"rs-httpbin\", nonce=\"deadbeef\", uri=\"/digest-auth/auth/testuser/testpass/MD5\", response=\"dummy\"";
-        let req = Request::builder().uri(uri).header(AUTHORIZATION, auth).body(Body::empty()).unwrap();
-        let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
-        let ct = resp.headers().get(CONTENT_TYPE).unwrap().to_str().unwrap();
-        assert!(ct.contains("application/json"));
-        let body = (resp.body()).await;
-        let text = String::from_utf8_lossy(&body);
-        assert!(text.contains("\"authenticated\":true"));
-        assert!(text.contains("testuser"));
-    }
+#[tokio::test]
+async fn test_drip_handler() {
+    let app = app();
+    let uri = "/drip?numbytes=100&duration=2&delay=1&code=200";
+    let response = app.oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let headers = response.headers();
+    assert_eq!(headers.get(CONTENT_TYPE).unwrap(), "application/octet-stream");
+}
 
-    #[tokio::test]
-    async fn test_digest_auth_no_algo_unauthorized() {
-        let app = app();
-        let uri = "/digest-auth/auth/testuser/testpass";
-        let req = Request::builder().uri(uri).body(Body::empty()).unwrap();
-        let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-        let www = resp.headers().get(WWW_AUTHENTICATE).unwrap().to_str().unwrap();
-        assert!(www.contains("Digest realm=\"rs-httpbin\""));
-    }
+#[tokio::test]
+async fn test_etag_handler() {
+    let etag = "test-etag";
+    let uri = format!("/etag/{}", etag);
 
-    #[tokio::test]
-    async fn test_digest_auth_no_algo_success() {
-        let app = app();
-        let uri = "/digest-auth/auth/testuser/testpass";
-        let auth = "Digest username=\"testuser\", realm=\"rs-httpbin\", nonce=\"deadbeef\", uri=\"/digest-auth/auth/testuser/testpass\", response=\"dummy\"";
-        let req = Request::builder().uri(uri).header(AUTHORIZATION, auth).body(Body::empty()).unwrap();
-        let resp = app.oneshot(req).await.unwrap();
-        assert_eq!(resp.status(), StatusCode::OK);
-        let ct = resp.headers().get(CONTENT_TYPE).unwrap().to_str().unwrap();
-        assert!(ct.contains("application/json"));
-        let body = (resp.body()).await;
-        let text = String::from_utf8_lossy(&body);
-        assert!(text.contains("\"authenticated\":true"));
-        assert!(text.contains("testuser"));
-    }
+    // Test without headers
+    let response = app()
+        .oneshot(Request::builder().uri(&uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let headers = response.headers();
+    assert_eq!(headers.get(ETAG).unwrap(), etag);
+
+    // Test with If-None-Match
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri(&uri)
+                .header(IF_NONE_MATCH, etag)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_MODIFIED);
+
+    // Test with If-Match
+    let response = app()
+        .oneshot(
+            Request::builder()
+                .uri(&uri)
+                .header(IF_MATCH, "wrong-etag")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::PRECONDITION_FAILED);
+}
+
+#[tokio::test]
+async fn test_range_handler() {
+    let app = app();
+    let uri = "/range/100?duration=2&chunk_size=10";
+    let response = app.oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let headers = response.headers();
+    assert_eq!(headers.get(CONTENT_TYPE).unwrap(), "application/octet-stream");
+}
+
+#[tokio::test]
+async fn test_stream_handler() {
+    let app = app();
+    let uri = "/stream/10";
+    let response = app.oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let headers = response.headers();
+    assert_eq!(headers.get(CONTENT_TYPE).unwrap(), "text/plain; charset=utf-8");
+    let body = (response.body_as_bytes()).await;
+    let text = String::from_utf8_lossy(&body);
+    assert!(text.contains("line 0"));
+    assert!(text.contains("line 9"));
 }
