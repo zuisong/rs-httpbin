@@ -2,7 +2,7 @@
 name = "rs-httpbin"
 version = "0.1.0"
 edition = "2024"
-rust-version = "1.87"
+rust-version = "1.89"
 
 [dependencies]
 axum = { version = "0.8.4", default-features = false, features = [
@@ -20,7 +20,7 @@ axum-extra = { version = "0.10.1", features = [
   "query",
   "typed-header",
 ] }
-axum-valid = { version = "0.23.0", default-features = false, features = [
+axum-valid = { version = "0.24.0", default-features = false, features = [
   "extra_query",
   "garde",
 ] }
@@ -29,25 +29,25 @@ client-ip = "0.1.1"
 derive_more = { version = "2.0.1", features = ["deref", "deref_mut"] }
 either = "1.15.0"
 fastrand = "2.3.0"
-form_urlencoded = "1.2.1"
+form_urlencoded = "1.2.2"
 futures-util = "0.3.31"
 garde = { version = "0.22", features = ["derive"] }
 indoc = "2.0.6"
-jiff = { version = "0.2.13", default-features = false, features = [
+jiff = { version = "0.2.15", default-features = false, features = [
   "serde",
   "std",
 ] }
 markdown = "1"
 mime = "0.3.17"
-minijinja = "2.10.2"
+minijinja = "2.12.0"
 multer = "3.1.0"
 serde = { version = "1.0.219", features = ["derive"] }
-serde_json = "1.0.140"
-socketioxide = { version = "0.17.0", features = ["extensions", "state"] }
-tokio = { version = "1.45.0", features = ["rt-multi-thread"] }
+serde_json = "1.0.143"
+socketioxide = { version = "0.17.2", features = ["extensions", "state"] }
+tokio = { version = "1.47.0", features = ["rt-multi-thread"] }
 tokio-stream = "0.1.17"
 tower = "0.5.2"
-tower-http = { version = "0.6.4", features = [
+tower-http = { version = "0.6.6", features = [
   "compression-full",
   "cors",
   "decompression-full",
@@ -65,14 +65,14 @@ tracing-subscriber = { version = "0.3.19", default-features = false, features = 
 uuid = { version = "~1.16", default-features = false, features = [
   "v4",
 ] }
-whoami = { version = "1.6", default-features = false }
+whoami = { version = "1.6.1", default-features = false }
 
 [dev-dependencies]
-anyhow = "1.0.98"
+anyhow = "1.0.99"
 http-body-util = "0.1.3"
-hyper-util = { version = "0.1.11", features = ["client-legacy"] }
+hyper-util = { version = "0.1.16", features = ["client-legacy"] }
 test-case = "3.3.1"
-tokio-tungstenite = "0.26"
+tokio-tungstenite = "~0.26.2"
 
 [features]
 default = []

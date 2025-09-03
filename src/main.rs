@@ -252,7 +252,7 @@ async fn unstable(Garde(Query(query)): Garde<Query<UnstableQueryParam>>) -> Resp
         None => 0.5,
         Some(failure_rate @ 0.0..=1.0) => failure_rate,
         _ => {
-            return ErasedJson::pretty(data::ErrorDetail::new(
+            return ErasedJson::pretty(ErrorDetail::new(
                 400,
                 "Bad Request",
                 format!(
@@ -329,11 +329,7 @@ mod basic_auth {
             )
                 .into_response()
         } else {
-            (
-                StatusCode::NOT_FOUND,
-                ErasedJson::pretty(data::ErrorDetail::new(404, "Not Found", "")),
-            )
-                .into_response()
+            (StatusCode::NOT_FOUND, ErasedJson::pretty(ErrorDetail::new(404, "Not Found", ""))).into_response()
         }
     }
 }
@@ -624,7 +620,7 @@ async fn bearer(header_map: HeaderMap) -> impl IntoResponse {
     let authorization = header_map.typed_get::<Authorization<Bearer>>();
 
     match authorization {
-        None => ErasedJson::pretty(data::ErrorDetail::new(401, "Unauthorized", "")).into_response(),
+        None => ErasedJson::pretty(ErrorDetail::new(401, "Unauthorized", "")).into_response(),
         Some(token) => ErasedJson::pretty(BearerAuth {
             authorized: true,
             token: token.token().to_string(),
@@ -645,7 +641,7 @@ mod redirect {
     }
 
     fn bad_redirect_request() -> ErasedJson {
-        ErasedJson::pretty(data::ErrorDetail::new(400, "Bad Request", "redirect count must be > 0".to_string()))
+        ErasedJson::pretty(ErrorDetail::new(400, "Bad Request", "redirect count must be > 0".to_string()))
     }
 
     pub async fn relative_redirect(Path(n): Path<i32>) -> Response {
@@ -870,6 +866,7 @@ async fn dump_request(request: Request) -> impl IntoResponse {
 }
 
 use axum::http::header::WWW_AUTHENTICATE;
+use data::ErrorDetail;
 use serde_json::json;
 
 async fn digest_auth_handler(Path((qop, user, passwd, algorithm)): Path<(String, String, String, String)>, headers: HeaderMap) -> Response {
