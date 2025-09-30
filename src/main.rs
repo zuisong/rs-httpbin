@@ -165,7 +165,8 @@ fn app() -> Router<()> {
         .route("/drip", get(drip_handler))
         .route("/etag/{etag}", any(etag_handler))
         .route("/range/{n}", get(range_handler))
-        .route("/stream/{n}", get(stream_handler));
+        .route("/stream/{n}", get(stream_handler))
+        .route("/stream-bytes/{n}", get(stream_bytes_handler));
 
     for format in ["gzip", "zstd", "br", "deflate"] {
         router = router.route(
@@ -1024,6 +1025,7 @@ async fn range_handler(Path(n): Path<u32>, Query(q): Query<RangeQuery>) -> impl 
 }
 
 async fn stream_handler(Path(n): Path<u32>) -> impl IntoResponse {
+    let n = n.min(100); // limit to max 100 lines
     let stream = stream::iter((0..n).map(|i| {
         Ok::<_, std::io::Error>(Bytes::from(format!(
             "line {}
@@ -1033,4 +1035,30 @@ async fn stream_handler(Path(n): Path<u32>) -> impl IntoResponse {
     }));
 
     ([(CONTENT_TYPE, "text/plain; charset=utf-8")], axum::body::Body::from_stream(stream))
+}
+
+#[derive(Debug, Deserialize)]
+struct StreamBytesQuery {
+    seed: Option<u64>,
+    chunk_size: Option<usize>,
+}
+
+async fn stream_bytes_handler(Path(n): Path<u32>, Query(q): Query<StreamBytesQuery>) -> impl IntoResponse {
+    let total = n as usize;
+    let chunk_size = q.chunk_size.unwrap_or(1024).max(1).min(10240); // default 1KB, max 10KB per chunk
+
+    let mut rng = if let Some(seed) = q.seed {
+        fastrand::Rng::with_seed(seed)
+    } else {
+        fastrand::Rng::new()
+    };
+
+    let stream = stream::iter((0..total).step_by(chunk_size).map(move |start| {
+        let end = (start + chunk_size).min(total);
+        let mut buf = vec![0u8; end - start];
+        rng.fill(&mut buf);
+        Ok::<_, std::io::Error>(Bytes::from(buf))
+    }));
+
+    ([(CONTENT_TYPE, "application/octet-stream")], axum::body::Body::from_stream(stream))
 }
