@@ -204,14 +204,12 @@ fn app() -> Router<()> {
             }
             middleware::from_fn(delay)
         })
-        .layer(socket_io_chat::socket_io_layer())
         .layer(DefaultBodyLimit::disable());
 
     router.layer(service)
 }
 
 mod axum_client_ip;
-mod socket_io_chat;
 mod swagger_ui;
 
 #[tokio::main]
