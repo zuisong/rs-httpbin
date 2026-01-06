@@ -13,17 +13,15 @@ axum = { version = "0.8.6", default-features = false, features = [
   "matched-path",
   "tower-log",
   "ws",
+  "query"
 ] }
-axum-extra = { version = "0.10.3", features = [
+axum-extra = { version = "0.12", features = [
   "cookie",
   "erased-json",
   "query",
   "typed-header",
 ] }
-axum-valid = { version = "0.24.0", default-features = false, features = [
-  "extra_query",
-  "garde",
-] }
+
 base64 = "0.22.1"
 client-ip = "0.1.1"
 derive_more = { version = "2.0.1", features = ["deref", "deref_mut"] }
@@ -61,10 +59,10 @@ tracing-subscriber = { version = "0.3.19", default-features = false, features = 
   "fmt",
   "json",
 ] }
-uuid = { version = "~1.16", default-features = false, features = [
+uuid = { version = "~1.19", default-features = false, features = [
   "v4",
 ] }
-whoami = { version = "1.6.1", default-features = false }
+whoami = { version = "2", default-features = false }
 
 [dev-dependencies]
 anyhow = "1.0.100"

@@ -17,14 +17,13 @@ use axum::{
 use axum_client_ip::InsecureClientIp;
 use axum_extra::{
     TypedHeader,
-    extract::{CookieJar, Host, Query, cookie},
+    extract::{CookieJar, Query, cookie},
     headers::{
         Authorization, ContentType, HeaderMapExt, UserAgent,
         authorization::{Basic, Bearer},
     },
     response::ErasedJson,
 };
-use axum_valid::Garde;
 use base64::{Engine, prelude::BASE64_STANDARD};
 use futures_util::stream;
 use garde::Validate;
@@ -40,9 +39,13 @@ use tracing::{debug_span, info};
 use tracing_subscriber::{EnvFilter, fmt::layer, layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::Uuid;
 
-use crate::data::{Headers, Http, Queries};
+use crate::{
+    data::{Headers, Http, Queries},
+    valid::Garde,
+};
 
 mod data;
+mod valid;
 mod ws_chat;
 mod ws_echo;
 
@@ -485,7 +488,7 @@ struct HostName {
 }
 
 async fn hostname() -> impl IntoResponse {
-    let hostname = whoami::fallible::hostname().unwrap_or("<< unknown hostname >>".to_string());
+    let hostname = whoami::hostname().unwrap_or("<< unknown hostname >>".to_string());
 
     ErasedJson::pretty(HostName { hostname })
 }
@@ -629,6 +632,8 @@ async fn bearer(header_map: HeaderMap) -> impl IntoResponse {
 }
 
 mod redirect {
+    use axum::extract::Query;
+
     use super::*;
 
     pub async fn redirect(Path(n): Path<i32>) -> Response {
@@ -651,7 +656,8 @@ mod redirect {
         }
     }
 
-    pub async fn absolute_redirect(Path(n): Path<i32>, uri: Uri, Host(host): Host, _req: Request) -> Response {
+    pub async fn absolute_redirect(Path(n): Path<i32>, uri: Uri, headers: HeaderMap, _req: Request) -> Response {
+        let host = headers.get(HOST).and_then(|v| v.to_str().ok()).unwrap_or("localhost");
         match n {
             ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
             1 => (StatusCode::FOUND, Redirect::to("/get")).into_response(),
