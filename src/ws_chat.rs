@@ -1,11 +1,4 @@
-use std::{
-    collections::HashMap,
-    error::Error,
-    io,
-    net::SocketAddr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::HashMap, error::Error, io, net::SocketAddr, sync::Arc, time::Duration};
 
 use axum::{
     extract::{

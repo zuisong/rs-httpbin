@@ -1,13 +1,13 @@
+use std::collections::BTreeMap;
+
 use axum::{
+    Json,
     extract::Path,
     http::{
-        HeaderMap,
-        StatusCode,
-        header::{AUTHORIZATION, CONTENT_TYPE, WWW_AUTHENTICATE, HeaderValue},
+        HeaderMap, Method, StatusCode,
+        header::{AUTHORIZATION, CONTENT_TYPE, HeaderValue, WWW_AUTHENTICATE},
     },
     response::{IntoResponse, Response},
-    Json,
-    http::Method,
 };
 use axum_extra::{
     TypedHeader,
@@ -16,7 +16,6 @@ use axum_extra::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::BTreeMap;
 
 use crate::data::ErrorDetail;
 
@@ -159,16 +158,9 @@ fn parse_and_verify_digest(
     let response = map.get("response")?;
 
     // HA1 = MD5(username:realm:password)
-    let ha1 = format!("{:x}", md5::compute(format!(r#"{}:{}:{}"#,
-        user,
-        realm,
-        passwd,
-    )));
+    let ha1 = format!("{:x}", md5::compute(format!(r#"{}:{}:{}"#, user, realm, passwd,)));
     // HA2 = MD5(method:digestURI)
-    let ha2 = format!("{:x}", md5::compute(format!(r#"{}:{}"#,
-        method,
-        uri,
-    )));
+    let ha2 = format!("{:x}", md5::compute(format!(r#"{}:{}"#, method, uri,)));
 
     // Response = MD5(HA1:nonce:nc:cnonce:qop:HA2)
     let nc = map.get("nc").copied().unwrap_or("");
@@ -177,22 +169,14 @@ fn parse_and_verify_digest(
     // If qop is present (auth), verify it matches
     // The server param 'qop' is what we expect.
     let computed = if qop.eq_ignore_ascii_case("auth") {
-        format!("{:x}", md5::compute(format!(r#"{}:{}:{}:{}:{}:{}"#,
-            ha1,
-            nonce,
-            nc,
-            cnonce,
-            qop,
-            ha2,
-        )))
+        format!(
+            "{:x}",
+            md5::compute(format!(r#"{}:{}:{}:{}:{}:{}"#, ha1, nonce, nc, cnonce, qop, ha2,))
+        )
     } else {
         // legacy RFC 2069 (no qop)
         // Response = MD5(HA1:nonce:HA2)
-        format!("{:x}", md5::compute(format!(r#"{}:{}:{}"#,
-            ha1,
-            nonce,
-            ha2,
-        )))
+        format!("{:x}", md5::compute(format!(r#"{}:{}:{}"#, ha1, nonce, ha2,)))
     };
 
     Some(computed == *response)

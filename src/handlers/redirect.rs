@@ -1,6 +1,9 @@
 use axum::{
     extract::{Path, Query},
-    http::{HeaderMap, StatusCode, Uri, header::{HOST, LOCATION}},
+    http::{
+        HeaderMap, StatusCode, Uri,
+        header::{HOST, LOCATION},
+    },
     response::{IntoResponse, Redirect, Response},
 };
 use axum_extra::response::ErasedJson;

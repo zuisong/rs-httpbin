@@ -18,10 +18,7 @@ use axum_client_ip::InsecureClientIp;
 use axum_extra::{
     TypedHeader,
     extract::{CookieJar, Query, cookie},
-    headers::{
-        Authorization, ContentType, HeaderMapExt, Range, UserAgent,
-        authorization::Bearer,
-    },
+    headers::{Authorization, ContentType, HeaderMapExt, Range, UserAgent, authorization::Bearer},
     response::ErasedJson,
 };
 use base64::{Engine, prelude::BASE64_STANDARD};
@@ -29,6 +26,7 @@ use futures_util::stream;
 use garde::Validate;
 use mime::{APPLICATION_JSON, IMAGE, TEXT_HTML_UTF_8, TEXT_PLAIN, TEXT_PLAIN_UTF_8, TEXT_XML};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use tokio::time::sleep;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -43,12 +41,10 @@ use crate::{
     data::{ErrorDetail, Headers, Http, Queries},
     valid::Garde,
 };
-use serde_json::json;
 
 mod data;
 mod handlers;
-use handlers::auth;
-use handlers::redirect;
+use handlers::{auth, redirect};
 
 mod valid;
 mod ws_chat;
@@ -281,8 +277,6 @@ async fn unstable(Garde(Query(query)): Garde<Query<UnstableQueryParam>>) -> Resp
 
     ().into_response()
 }
-
-
 
 fn get_headers(header_map: &HeaderMap) -> Headers {
     let mut headers = Headers::default();
@@ -579,8 +573,6 @@ async fn bearer(header_map: HeaderMap) -> impl IntoResponse {
     }
 }
 
-
-
 mod base_64 {
     use super::*;
 
@@ -756,8 +748,6 @@ async fn dump_request(request: Request) -> impl IntoResponse {
     ([(CONTENT_TYPE, "text/plain; charset=utf-8")], req)
 }
 
-
-
 #[derive(Debug, Deserialize)]
 struct DripQuery {
     numbytes: Option<usize>,
@@ -887,7 +877,7 @@ struct StreamBytesQuery {
 
 async fn stream_bytes_handler(Path(n): Path<u32>, Query(q): Query<StreamBytesQuery>) -> impl IntoResponse {
     let total = n as usize;
-    let chunk_size = q.chunk_size.unwrap_or(1024).clamp(1,10240); // default 1KB, max 10KB per chunk
+    let chunk_size = q.chunk_size.unwrap_or(1024).clamp(1, 10240); // default 1KB, max 10KB per chunk
 
     let mut rng = if let Some(seed) = q.seed {
         fastrand::Rng::with_seed(seed)

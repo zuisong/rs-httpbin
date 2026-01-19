@@ -1,6 +1,5 @@
-use std::{future::IntoFuture as _, net::Ipv4Addr};
+use std::{error::Error, future::IntoFuture as _, net::Ipv4Addr};
 
-use anyhow::{Ok, Result};
 use axum::{
     body::Body,
     http::{Request, StatusCode},
@@ -14,6 +13,8 @@ use tokio::net::TcpListener;
 use super::*;
 
 pub mod ext;
+
+type Result<T> = core::result::Result<T, Box<dyn Error>>;
 
 #[tokio::test]
 async fn index() -> Result<()> {
