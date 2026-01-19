@@ -3,12 +3,13 @@ use std::{
     error::Error,
     io,
     net::SocketAddr,
-    sync::{Arc, LazyLock},
+    sync::Arc,
     time::Duration,
 };
 
 use axum::{
     extract::{
+        State,
         connect_info::ConnectInfo,
         ws::{Message, WebSocket, WebSocketUpgrade, rejection::WebSocketUpgradeRejection},
     },
@@ -18,11 +19,34 @@ use futures_util::{FutureExt as _, StreamExt};
 use tokio::sync::{Mutex, mpsc};
 use tracing::{debug, error, info};
 
-static STATE: LazyLock<Arc<Mutex<Shared>>> = LazyLock::new(|| Arc::new(Mutex::new(Shared::new())));
+#[derive(Clone, Debug)]
+pub struct AppState {
+    inner: Arc<Mutex<Shared>>,
+}
 
-pub async fn ws_handler(ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>, ConnectInfo(addr): ConnectInfo<SocketAddr>) -> Response {
+impl Default for AppState {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(Mutex::new(Shared::new())),
+        }
+    }
+}
+
+impl AppState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+pub async fn ws_handler(
+    State(state): State<AppState>,
+    ws: Result<WebSocketUpgrade, WebSocketUpgradeRejection>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+) -> Response {
     match ws {
-        Ok(ws) => ws.on_upgrade(move |socket| process(socket, addr).map(|_res| ())).into_response(),
+        Ok(ws) => ws
+            .on_upgrade(move |socket| process(state, socket, addr).map(|_res| ()))
+            .into_response(),
         Err(_) => Html(include_str!("../assets/ws-chat.html")).into_response(),
     }
 }
@@ -56,16 +80,15 @@ impl Shared {
 }
 
 impl Peer {
-    async fn new(state: Arc<Mutex<Shared>>, socket: WebSocket, who: Id) -> io::Result<Peer> {
+    async fn new(state: AppState, socket: WebSocket, who: Id) -> io::Result<Peer> {
         let addr = who;
         let (tx, rx) = mpsc::unbounded_channel();
-        state.lock().await.peers.insert(addr, tx);
+        state.inner.lock().await.peers.insert(addr, tx);
         Ok(Peer { socket, rx })
     }
 }
 
-async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> {
-    let state = &STATE.clone();
+async fn process(state: AppState, ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> {
     let mut lines = ws;
     lines.send(("Please enter your username:").into()).await?;
 
@@ -76,13 +99,13 @@ async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> 
             return Ok(());
         }
     };
-    let addr = uuid::Uuid::new_v4();
-    let mut peer = Peer::new(state.clone(), lines, addr).await?;
+    let peer_id = uuid::Uuid::new_v4();
+    let mut peer = Peer::new(state.clone(), lines, peer_id).await?;
     {
-        let mut state = state.lock().await;
+        let mut state = state.inner.lock().await;
         let msg = format!("{username} has joined the chat");
         info!("{}", msg);
-        state.broadcast(addr, &msg.into()).await;
+        state.broadcast(peer_id, &msg.into()).await;
     }
 
     loop {
@@ -99,9 +122,9 @@ async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> 
                     debug!("{:?}", msg);
                     match msg {
                         Message::Text(msg) => {
-                            let mut state = state.lock().await;
-                            let msg = format!("{username}({addr}): {msg}");
-                            state.broadcast(addr, &msg.into()).await;
+                            let mut state = state.inner.lock().await;
+                            let msg = format!("{username}({peer_id}): {msg}");
+                            state.broadcast(peer_id, &msg.into()).await;
                         }
                         Message::Ping(_) => peer.socket.send(Message::Pong("".into())).await?,
                         Message::Binary(_) => (),
@@ -117,12 +140,12 @@ async fn process(ws: WebSocket, addr: SocketAddr) -> Result<(), Box<dyn Error>> 
         }
     }
     {
-        let mut state = state.lock().await;
-        state.peers.remove(&addr);
+        let mut state = state.inner.lock().await;
+        state.peers.remove(&peer_id);
 
         let msg = format!("{username} has left the chat");
         info!("{}", msg);
-        state.broadcast(addr, &msg.into()).await;
+        state.broadcast(peer_id, &msg.into()).await;
     }
 
     Ok(())

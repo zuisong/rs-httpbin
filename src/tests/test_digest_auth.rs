@@ -25,8 +25,29 @@ async fn test_digest_auth_unauthorized() {
 async fn test_digest_auth_success() {
     let app = app();
     let uri = "/digest-auth/auth/testuser/testpass/MD5";
+
+    let user = "testuser";
+    let realm = "rs-httpbin";
+    let passwd = "testpass";
+    let nonce = "deadbeef";
+    let method = "GET";
+    let qop = "auth";
+    let nc = "00000001";
+    let cnonce = "123456";
+
+    // HA1 = MD5(username:realm:password)
+    let ha1 = format!("{:x}", md5::compute(format!("{}:{}:{}", user, realm, passwd)));
+    // HA2 = MD5(method:digestURI)
+    let ha2 = format!("{:x}", md5::compute(format!("{}:{}", method, uri)));
+    // Response = MD5(HA1:nonce:nc:cnonce:qop:HA2)
+    let response_hash = format!("{:x}", md5::compute(format!("{}:{}:{}:{}:{}:{}", ha1, nonce, nc, cnonce, qop, ha2)));
+
     // 构造一个简单的 Authorization 头
-    let auth = "Digest username=\"testuser\", realm=\"rs-httpbin\", nonce=\"deadbeef\", uri=\"/digest-auth/auth/testuser/testpass/MD5\", response=\"dummy\"";
+    let auth = format!(
+        "Digest username=\"{}\", realm=\"{}\", nonce=\"{}\", uri=\"{}\", qop={}, nc={}, cnonce=\"{}\", response=\"{}\", opaque=\"cafebabe\"",
+        user, realm, nonce, uri, qop, nc, cnonce, response_hash
+    );
+
     let req = Request::builder().uri(uri).header(AUTHORIZATION, auth).body(Body::empty()).unwrap();
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);
@@ -53,7 +74,28 @@ async fn test_digest_auth_no_algo_unauthorized() {
 async fn test_digest_auth_no_algo_success() {
     let app = app();
     let uri = "/digest-auth/auth/testuser/testpass";
-    let auth = "Digest username=\"testuser\", realm=\"rs-httpbin\", nonce=\"deadbeef\", uri=\"/digest-auth/auth/testuser/testpass\", response=\"dummy\"";
+
+    let user = "testuser";
+    let realm = "rs-httpbin";
+    let passwd = "testpass";
+    let nonce = "deadbeef";
+    let method = "GET";
+    let qop = "auth";
+    let nc = "00000001";
+    let cnonce = "123456";
+
+    // HA1 = MD5(username:realm:password)
+    let ha1 = format!("{:x}", md5::compute(format!("{}:{}:{}", user, realm, passwd)));
+    // HA2 = MD5(method:digestURI)
+    let ha2 = format!("{:x}", md5::compute(format!("{}:{}", method, uri)));
+    // Response = MD5(HA1:nonce:nc:cnonce:qop:HA2)
+    let response_hash = format!("{:x}", md5::compute(format!("{}:{}:{}:{}:{}:{}", ha1, nonce, nc, cnonce, qop, ha2)));
+
+    let auth = format!(
+        "Digest username=\"{}\", realm=\"{}\", nonce=\"{}\", uri=\"{}\", qop={}, nc={}, cnonce=\"{}\", response=\"{}\", opaque=\"cafebabe\"",
+        user, realm, nonce, uri, qop, nc, cnonce, response_hash
+    );
+
     let req = Request::builder().uri(uri).header(AUTHORIZATION, auth).body(Body::empty()).unwrap();
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::OK);

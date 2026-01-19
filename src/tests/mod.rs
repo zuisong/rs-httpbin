@@ -945,11 +945,17 @@ use crate::{app, tests::ext::BodyExt};
 #[tokio::test]
 async fn test_drip_handler() {
     let app = app();
-    let uri = "/drip?numbytes=100&duration=2&delay=1&code=200";
+    let uri = "/drip?numbytes=5&duration=1&delay=0&code=200";
+    let start = Instant::now();
     let response = app.oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap()).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let headers = response.headers();
     assert_eq!(headers.get(CONTENT_TYPE).unwrap(), "application/octet-stream");
+    let body = response.body_as_bytes().await;
+    let end = Instant::now();
+    assert_eq!(body.len(), 5);
+    // 应该至少持续1秒（duration）
+    assert!(end - start >= Duration::from_millis(900));
 }
 
 #[tokio::test]
@@ -997,10 +1003,33 @@ async fn test_etag_handler() {
 async fn test_range_handler() {
     let app = app();
     let uri = "/range/100?duration=2&chunk_size=10";
-    let response = app.oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap()).await.unwrap();
+    // 1. 无 Range 头
+    let response = app
+        .clone()
+        .oneshot(Request::builder().uri(uri).body(Body::empty()).unwrap())
+        .await
+        .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
     let headers = response.headers();
     assert_eq!(headers.get(CONTENT_TYPE).unwrap(), "application/octet-stream");
+    assert_eq!(response.body_as_bytes().await.len(), 100);
+
+    // 2. 有 Range 头 bytes=10-24 (15 bytes)
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri(uri)
+                .header("Range", "bytes=10-24")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::PARTIAL_CONTENT);
+    let headers = response.headers();
+    assert_eq!(headers.get("Content-Range").unwrap(), "bytes 10-24/100");
+    let body = response.body_as_bytes().await;
+    assert_eq!(body.len(), 15);
 }
 
 #[tokio::test]

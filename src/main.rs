@@ -19,8 +19,8 @@ use axum_extra::{
     TypedHeader,
     extract::{CookieJar, Query, cookie},
     headers::{
-        Authorization, ContentType, HeaderMapExt, UserAgent,
-        authorization::{Basic, Bearer},
+        Authorization, ContentType, HeaderMapExt, Range, UserAgent,
+        authorization::Bearer,
     },
     response::ErasedJson,
 };
@@ -40,11 +40,16 @@ use tracing_subscriber::{EnvFilter, fmt::layer, layer::SubscriberExt, util::Subs
 use uuid::Uuid;
 
 use crate::{
-    data::{Headers, Http, Queries},
+    data::{ErrorDetail, Headers, Http, Queries},
     valid::Garde,
 };
+use serde_json::json;
 
 mod data;
+mod handlers;
+use handlers::auth;
+use handlers::redirect;
+
 mod valid;
 mod ws_chat;
 mod ws_echo;
@@ -80,8 +85,8 @@ fn app() -> Router<()> {
         )
         .merge(
             Router::new()
-                .route("/basic-auth/{user}/{passwd}", any(basic_auth::basic_auth))
-                .route("/hidden-basic-auth/{user}/{passwd}", any(basic_auth::hidden_basic_auth)),
+                .route("/basic-auth/{user}/{passwd}", any(auth::basic_auth))
+                .route("/hidden-basic-auth/{user}/{passwd}", any(auth::hidden_basic_auth)),
         )
         .merge(
             Router::new()
@@ -146,7 +151,11 @@ fn app() -> Router<()> {
             }),
         )
         .route("/websocket/echo", any(ws_echo::ws_echo_handler))
-        .route("/websocket/chat", any(ws_chat::ws_handler))
+        .merge(
+            Router::new()
+                .route("/websocket/chat", any(ws_chat::ws_handler))
+                .with_state(ws_chat::AppState::new()),
+        )
         .route(
             "/socket-io/chat",
             any(|| async { Html(include_str!("../assets/socketio-chat.html")) }),
@@ -163,8 +172,8 @@ fn app() -> Router<()> {
         .route("/status/{code}", any(status_code_handler))
         .route("/bytes/{n}", get(bytes_n))
         .route("/dump/request", any(dump_request))
-        .route("/digest-auth/{qop}/{user}/{passwd}/{algorithm}", any(digest_auth_handler))
-        .route("/digest-auth/{qop}/{user}/{passwd}", any(digest_auth_no_algo_handler))
+        .route("/digest-auth/{qop}/{user}/{passwd}/{algorithm}", any(auth::digest_auth_handler))
+        .route("/digest-auth/{qop}/{user}/{passwd}", any(auth::digest_auth_no_algo_handler))
         .route("/drip", get(drip_handler))
         .route("/etag/{etag}", any(etag_handler))
         .route("/range/{n}", get(range_handler))
@@ -207,7 +216,7 @@ fn app() -> Router<()> {
             }
             middleware::from_fn(delay)
         })
-        .layer(DefaultBodyLimit::disable());
+        .layer(DefaultBodyLimit::max(1024 * 1024 * 100));
 
     router.layer(service)
 }
@@ -273,68 +282,7 @@ async fn unstable(Garde(Query(query)): Garde<Query<UnstableQueryParam>>) -> Resp
     ().into_response()
 }
 
-mod basic_auth {
-    use super::*;
 
-    #[derive(Serialize, Deserialize)]
-    struct BasicAuth {
-        pub authorized: bool,
-        pub user: String,
-    }
-
-    #[derive(Deserialize)]
-    pub struct BasicAuthParam {
-        user: String,
-        passwd: String,
-    }
-
-    pub async fn basic_auth(
-        Path(BasicAuthParam { user, passwd }): Path<BasicAuthParam>,
-        basic_auth: Option<TypedHeader<Authorization<Basic>>>,
-    ) -> impl IntoResponse {
-        let authorized = match &basic_auth {
-            None => false,
-            Some(auth) => auth.username() == user && auth.password() == passwd,
-        };
-        let body = ErasedJson::pretty(BasicAuth {
-            authorized,
-            user: basic_auth.map(|it| it.username().to_string()).unwrap_or_default(),
-        });
-        if authorized {
-            (StatusCode::OK, body).into_response()
-        } else {
-            (
-                StatusCode::UNAUTHORIZED,
-                [(WWW_AUTHENTICATE, HeaderValue::from_static(r#"Basic realm="Fake Realm""#))],
-                body,
-            )
-                .into_response()
-        }
-    }
-
-    pub async fn hidden_basic_auth(
-        Path(BasicAuthParam { user, passwd }): Path<BasicAuthParam>,
-        basic_auth: Option<TypedHeader<Authorization<Basic>>>,
-    ) -> impl IntoResponse {
-        let authorized = match basic_auth {
-            None => false,
-            Some(auth) => auth.username() == user && auth.password() == passwd,
-        };
-
-        if authorized {
-            (
-                StatusCode::OK,
-                ErasedJson::pretty(BasicAuth {
-                    authorized,
-                    user: if authorized { user } else { Default::default() },
-                }),
-            )
-                .into_response()
-        } else {
-            (StatusCode::NOT_FOUND, ErasedJson::pretty(ErrorDetail::new(404, "Not Found", ""))).into_response()
-        }
-    }
-}
 
 fn get_headers(header_map: &HeaderMap) -> Headers {
     let mut headers = Headers::default();
@@ -631,69 +579,7 @@ async fn bearer(header_map: HeaderMap) -> impl IntoResponse {
     }
 }
 
-mod redirect {
-    use axum::extract::Query;
 
-    use super::*;
-
-    pub async fn redirect(Path(n): Path<i32>) -> Response {
-        match n {
-            ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
-            1 => (StatusCode::FOUND, Redirect::to("/get")).into_response(),
-            2.. => (StatusCode::FOUND, Redirect::to(&format!("/redirect/{}", n - 1))).into_response(),
-        }
-    }
-
-    fn bad_redirect_request() -> ErasedJson {
-        ErasedJson::pretty(ErrorDetail::new(400, "Bad Request", "redirect count must be > 0".to_string()))
-    }
-
-    pub async fn relative_redirect(Path(n): Path<i32>) -> Response {
-        match n {
-            ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
-            1 => (StatusCode::FOUND, Redirect::to("/get")).into_response(),
-            2.. => (StatusCode::FOUND, [(LOCATION, format!("./{}", n - 1))]).into_response(),
-        }
-    }
-
-    pub async fn absolute_redirect(Path(n): Path<i32>, uri: Uri, headers: HeaderMap, _req: Request) -> Response {
-        let host = headers.get(HOST).and_then(|v| v.to_str().ok()).unwrap_or("localhost");
-        match n {
-            ..=0 => (StatusCode::BAD_REQUEST, bad_redirect_request()).into_response(),
-            1 => (StatusCode::FOUND, Redirect::to("/get")).into_response(),
-            2.. => (
-                StatusCode::FOUND,
-                Redirect::to(&format!(
-                    "{}://{host}/absolute-redirect/{}",
-                    uri.scheme_str().unwrap_or("http"),
-                    n - 1
-                )),
-            )
-                .into_response(),
-        }
-    }
-
-    #[derive(Debug, Deserialize, Validate)]
-    pub struct Params {
-        #[garde(length(min = 0))]
-        url: String,
-        #[garde(range(min = 100, max = 999))]
-        status_code: Option<u16>,
-    }
-
-    pub async fn redirect_to(Garde(Query(p)): Garde<Query<Params>>) -> Response {
-        let Params { url, status_code } = p;
-        let status_code = status_code.unwrap_or(302);
-        (
-            StatusCode::from_u16(status_code)
-                .ok()
-                .filter(StatusCode::is_redirection)
-                .unwrap_or(StatusCode::FOUND),
-            Redirect::to(&url),
-        )
-            .into_response()
-    }
-}
 
 mod base_64 {
     use super::*;
@@ -870,94 +756,7 @@ async fn dump_request(request: Request) -> impl IntoResponse {
     ([(CONTENT_TYPE, "text/plain; charset=utf-8")], req)
 }
 
-use axum::http::header::WWW_AUTHENTICATE;
-use data::ErrorDetail;
-use serde_json::json;
 
-async fn digest_auth_handler(Path((qop, user, passwd, algorithm)): Path<(String, String, String, String)>, headers: HeaderMap) -> Response {
-    // 生成一个固定的 realm 和 nonce
-    let realm = "rs-httpbin";
-    let nonce = "deadbeef";
-    let opaque = "cafebabe";
-    let auth_header = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok());
-    if let Some(auth) = auth_header {
-        if let Some(resp) = parse_and_verify_digest(auth, &user, &passwd, realm, &qop, &algorithm, nonce, opaque) {
-            if resp {
-                return (
-                    StatusCode::OK,
-                    [(CONTENT_TYPE, "application/json")],
-                    Json(json!({
-                        "authenticated": true,
-                        "user": user,
-                        "qop": qop,
-                        "algorithm": algorithm
-                    })),
-                )
-                    .into_response();
-            }
-        }
-    }
-    let value = format!(r#"Digest realm="{realm}",qop="{qop}",nonce="{nonce}",opaque="{opaque}",algorithm="{algorithm}""#);
-    (
-        StatusCode::UNAUTHORIZED,
-        [(WWW_AUTHENTICATE, value)],
-        Json(json!({"authenticated": false, "user": user})),
-    )
-        .into_response()
-}
-
-// 简单的 Digest 验证，仅做演示用途
-#[allow(clippy::too_many_arguments)]
-fn parse_and_verify_digest(
-    header: &str,
-    user: &str,
-    _passwd: &str,
-    realm: &str,
-    _qop: &str,
-    _algorithm: &str,
-    nonce: &str,
-    _opaque: &str,
-) -> Option<bool> {
-    // 这里只做最简单的 header 检查，实际 Digest Auth 需完整实现 RFC 7616
-    if header.starts_with("Digest ") && header.contains(user) && header.contains(realm) && header.contains(nonce) {
-        // 只要 header 里包含这些字段就算通过
-        Some(true)
-    } else {
-        None
-    }
-}
-
-async fn digest_auth_no_algo_handler(Path((qop, user, passwd)): Path<(String, String, String)>, headers: HeaderMap) -> impl IntoResponse {
-    let realm = "rs-httpbin";
-    let nonce = "deadbeef";
-    let opaque = "cafebabe";
-    let algorithm = "MD5"; // 默认算法
-    let auth_header = headers.get(AUTHORIZATION).and_then(|v| v.to_str().ok());
-    if let Some(auth) = auth_header {
-        if let Some(resp) = parse_and_verify_digest(auth, &user, &passwd, realm, &qop, algorithm, nonce, opaque) {
-            if resp {
-                return (
-                    StatusCode::OK,
-                    [(CONTENT_TYPE, "application/json")],
-                    Json(json!({
-                        "authenticated": true,
-                        "user": user,
-                        "qop": qop,
-                        "algorithm": algorithm
-                    })),
-                )
-                    .into_response();
-            }
-        }
-    }
-    let value = format!("Digest realm=\"{realm}\",qop=\"{qop}\",nonce=\"{nonce}\",opaque=\"{opaque}\",algorithm=\"{algorithm}\"");
-    (
-        StatusCode::UNAUTHORIZED,
-        [(WWW_AUTHENTICATE, &value)],
-        Json(json!({"authenticated": false, "user": user})),
-    )
-        .into_response()
-}
 
 #[derive(Debug, Deserialize)]
 struct DripQuery {
@@ -968,6 +767,8 @@ struct DripQuery {
 }
 
 async fn drip_handler(Query(q): Query<DripQuery>) -> impl IntoResponse {
+    use tokio_stream::StreamExt as _;
+
     let numbytes = q.numbytes.unwrap_or(10);
     let duration = q.duration.unwrap_or(1);
     let delay = q.delay.unwrap_or(0);
@@ -976,11 +777,13 @@ async fn drip_handler(Query(q): Query<DripQuery>) -> impl IntoResponse {
     sleep(Duration::from_secs(delay)).await;
 
     let chunk_size = (numbytes as u64 / duration).max(1) as usize;
+
     let stream = stream::iter(
         (0..numbytes)
             .step_by(chunk_size)
             .map(move |_| Ok::<_, std::io::Error>(Bytes::from_iter(vec![b'*'; chunk_size]))),
-    );
+    )
+    .throttle(Duration::from_secs(1));
 
     (
         StatusCode::from_u16(code).unwrap_or(StatusCode::OK),
@@ -993,16 +796,16 @@ async fn etag_handler(Path(etag): Path<String>, headers: HeaderMap) -> impl Into
     let if_none_match = headers.get(IF_NONE_MATCH).and_then(|v| v.to_str().ok());
     let if_match = headers.get(IF_MATCH).and_then(|v| v.to_str().ok());
 
-    if let Some(tag) = if_none_match {
-        if tag == etag {
-            return StatusCode::NOT_MODIFIED.into_response();
-        }
+    if let Some(tag) = if_none_match
+        && tag == etag
+    {
+        return StatusCode::NOT_MODIFIED.into_response();
     }
 
-    if let Some(tag) = if_match {
-        if tag != etag {
-            return StatusCode::PRECONDITION_FAILED.into_response();
-        }
+    if let Some(tag) = if_match
+        && tag != etag
+    {
+        return StatusCode::PRECONDITION_FAILED.into_response();
     }
 
     ([(ETAG, etag.as_bytes())], Json(json!({ "etag": etag }))).into_response()
@@ -1014,18 +817,53 @@ struct RangeQuery {
     chunk_size: Option<usize>,
 }
 
-async fn range_handler(Path(n): Path<u32>, Query(q): Query<RangeQuery>) -> impl IntoResponse {
-    let total = n as usize;
+use std::ops::Bound;
+
+async fn range_handler(Path(n): Path<u32>, range: Option<TypedHeader<Range>>, Query(q): Query<RangeQuery>) -> impl IntoResponse {
+    let total = n as u64;
     let chunk_size = q.chunk_size.unwrap_or(4096).max(1);
     let _duration = q.duration.unwrap_or(1);
+
+    if let Some(TypedHeader(range)) = range {
+        if let Some((start_bound, end_bound)) = range.satisfiable_ranges(total).next() {
+            let start = match start_bound {
+                Bound::Included(v) => v,
+                Bound::Excluded(v) => v + 1,
+                Bound::Unbounded => 0,
+            };
+            let end = match end_bound {
+                Bound::Included(v) => v,
+                Bound::Excluded(v) => v - 1,
+                Bound::Unbounded => total - 1,
+            };
+
+            let stream = stream::iter((start..=end).step_by(chunk_size).map(move |s| {
+                let len = (chunk_size as u64).min(end - s + 1);
+                Ok::<_, std::io::Error>(Bytes::from_iter(vec![b'a'; len as usize]))
+            }));
+
+            return (
+                StatusCode::PARTIAL_CONTENT,
+                [(CONTENT_RANGE, format!("bytes {}-{}/{}", start, end, total))],
+                axum::body::Body::from_stream(stream),
+            )
+                .into_response();
+        }
+        return (StatusCode::RANGE_NOT_SATISFIABLE, [(CONTENT_RANGE, format!("bytes */{}", total))]).into_response();
+    }
 
     let stream = stream::iter(
         (0..total)
             .step_by(chunk_size)
-            .map(move |_| Ok::<_, std::io::Error>(Bytes::from_iter(vec![b'*'; chunk_size]))),
+            .map(move |_| Ok::<_, std::io::Error>(Bytes::from_iter(vec![b'a'; chunk_size]))),
     );
 
-    ([(CONTENT_TYPE, "application/octet-stream")], axum::body::Body::from_stream(stream))
+    (
+        StatusCode::OK,
+        [(CONTENT_TYPE, "application/octet-stream")],
+        axum::body::Body::from_stream(stream),
+    )
+        .into_response()
 }
 
 async fn stream_handler(Path(n): Path<u32>) -> impl IntoResponse {
@@ -1049,7 +887,7 @@ struct StreamBytesQuery {
 
 async fn stream_bytes_handler(Path(n): Path<u32>, Query(q): Query<StreamBytesQuery>) -> impl IntoResponse {
     let total = n as usize;
-    let chunk_size = q.chunk_size.unwrap_or(1024).max(1).min(10240); // default 1KB, max 10KB per chunk
+    let chunk_size = q.chunk_size.unwrap_or(1024).clamp(1,10240); // default 1KB, max 10KB per chunk
 
     let mut rng = if let Some(seed) = q.seed {
         fastrand::Rng::with_seed(seed)

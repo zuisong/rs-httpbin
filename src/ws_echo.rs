@@ -61,12 +61,13 @@ async fn handle_socket(mut socket: WebSocket, who: SocketAddr) {
 
         let msg = match res {
             Either::Left(_) => {
-                if let Err(e) = socket.send(Message::Close(None)).await {
-                    info!("timeout: Could not send Close due to {e}, probably it is ok?");
+                if let Err(e) = socket.send(Message::Ping(vec![].into())).await {
+                    info!("timeout: Could not send Ping due to {e}, probably client disconnected");
+                    break;
                 } else {
-                    info!("timeout: Close sent to {who}")
+                    info!("timeout: Ping sent to {who}")
                 }
-                break;
+                continue;
             }
             Either::Right(None) => break,
             Either::Right(Some(Ok(msg))) => msg,
